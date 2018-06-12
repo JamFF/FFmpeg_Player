@@ -1,1 +1,1 @@
-include ':app', ':ffmpeg4'
+include ':app', ':ffmpeg4', ':ffmpeg4_so'

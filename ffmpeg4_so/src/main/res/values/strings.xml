@@ -1,0 +1,4 @@
+<resources>
+    <string name="app_name">FFmpeg4.0_Player</string>
+    <string name="decode">解码</string>
+</resources>
