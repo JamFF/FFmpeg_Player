@@ -2,11 +2,11 @@
 #include <android/log.h>
 
 //编码
-#include "include/libavcodec/avcodec.h"
+#include <libavcodec/avcodec.h>
 //封装格式处理
-#include "include/libavformat/avformat.h"
+#include <libavformat/avformat.h>
 //像素处理
-#include "include/libswscale/swscale.h"
+#include <libswscale/swscale.h>
 
 #define LOG_I(FORMAT, ...) __android_log_print(ANDROID_LOG_INFO,"JamFF",FORMAT,##__VA_ARGS__);
 #define LOG_E(FORMAT, ...) __android_log_print(ANDROID_LOG_ERROR,"JamFF",FORMAT,##__VA_ARGS__);

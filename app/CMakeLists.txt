@@ -6,7 +6,7 @@
 cmake_minimum_required(VERSION 3.4.1)
 
 # 设置生成的so动态库最后输出的路径
-set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/../jniLibs/${ANDROID_ABI})
+set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/jniLibs/${ANDROID_ABI})
 
 # 设置头文件路径，在代码中include时不需要带路径了
 include_directories(${CMAKE_SOURCE_DIR}/src/main/jni/include)
