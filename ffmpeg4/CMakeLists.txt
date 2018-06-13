@@ -69,12 +69,12 @@ set_target_properties(swscale
 # you want to add. CMake verifies that the library exists before
 # completing its build.
 
-find_library( # Sets the name of the path variable.
-              log-lib
+#find_library( # Sets the name of the path variable.
+#              log-lib
 
               # Specifies the name of the NDK library that
               # you want CMake to locate.
-              log )
+#              log )
 
 # Specifies libraries CMake should link to your target library. You
 # can link multiple libraries, such as libraries you define in this
@@ -92,4 +92,6 @@ target_link_libraries( # Specifies the target library.
 
                        # Links the target library to the log library
                        # included in the NDK.
-                       ${log-lib} )
+                       # 这里可以简化，不使用${log-lib}
+                       # 目录在...\sdk\ndk-bundle\platforms\android-21\arch-arm\usr\lib\liblog.so
+                       log )

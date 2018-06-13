@@ -10,6 +10,7 @@ android {
         versionName "1.0"
         externalNativeBuild {
             cmake {
+                // 给C++编译器的参数，还有cFlags，给C编译器的参数
                 cppFlags ""
                 // 编译自己的so库支持的架构
                 abiFilters 'armeabi-v7a'

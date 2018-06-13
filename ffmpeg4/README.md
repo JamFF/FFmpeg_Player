@@ -3,12 +3,11 @@
 
 ```
 #!/bin/bash
+#shell脚本第一行必须是指定shell脚本解释器，这里使用的是bash解释器
 
 #一系列命令的集合 cd xx;dir
 
-#ndkr17
-
-#shell脚本第一行必须是指定shell脚本解释器
+#ndk r17
 
 make clean
 
@@ -29,7 +28,7 @@ export CPU=arm
 export PREFIX=$(pwd)/android/$CPU
 
 #给编译器的变量
- #定义变量 值从FFmpeg_Player\app\.externalNativeBuild\cmake\release\armeabi-v7a\build.ninja 复制的
+#定义变量 值从FFmpeg_Player\app\.externalNativeBuild\cmake\release\armeabi-v7a\build.ninja 复制的
 FLAG="-isystem $NDK/sysroot/usr/include/arm-linux-androideabi -D__ANDROID_API__=21 -g -DANDROID -ffunction-sections -funwind-tables -fstack-protector-strong -no-canonical-prefixes -march=armv7-a -mfloat-abi=softfp -mfpu=vfpv3-d16 -mthumb -Wa,--noexecstack -Wformat -Werror=format-security  -Os -DNDEBUG  -fPIC"
 
 INCLUDES="-isystem $NDK/sources/cxx-stl/gnu-libstdc++/4.9/include -isystem $NDK/sources/cxx-stl/gnu-libstdc++/4.9/libs/armeabi-v7a/include -isystem $NDK/sources/cxx-stl/gnu-libstdc++/4.9/include/backward"
