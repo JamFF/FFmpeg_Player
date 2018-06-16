@@ -1,5 +1,5 @@
 # FFmpeg_Player
-在NDK r10e环境下，编译FFmpeg2.6.9动态库，使用FFmpeg将MP4解码YUV
+在NDK r10e环境下，使用老脚本，编译FFmpeg2.6.9动态库，使用FFmpeg将MP4解码YUV
 
 ```
 #!/bin/bash

@@ -1,5 +1,5 @@
 # FFmpeg_Player
-在NDK r17环境下，编译FFmpeg4.0静态库
+在NDK r17环境下，使用新脚本，编译FFmpeg4.0静态库
 
 ```
 #!/bin/bash
