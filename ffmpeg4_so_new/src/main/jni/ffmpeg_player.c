@@ -83,7 +83,7 @@ Java_com_jamff_ffmpeg_VideoUtils_decode(JNIEnv *env, jclass type, jstring input_
     // 准备读取
     // AVPacket，编码数据，用于存储一帧一帧的压缩数据（H264）
     // 缓冲区，开辟空间
-    AVPacket *packet = (AVPacket *) av_malloc(sizeof(AVPacket));
+    AVPacket *packet = av_malloc(sizeof(AVPacket));
 
     // AVFrame，像素数据（解码数据），用于存储解码后的像素数据(YUV)
     // 内存分配
