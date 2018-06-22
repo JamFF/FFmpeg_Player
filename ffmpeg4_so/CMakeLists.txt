@@ -8,8 +8,9 @@ cmake_minimum_required(VERSION 3.4.1)
 # 设置生成的so动态库最后输出的路径
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/jniLibs/${ANDROID_ABI})
 
+set(INCLUDE_DIR ${CMAKE_SOURCE_DIR}/src/main/jni/include)
 # 设置头文件路径，在代码中include时不需要带路径了
-include_directories(${CMAKE_SOURCE_DIR}/src/main/jni/include)
+include_directories(${INCLUDE_DIR}/ffmpeg ${INCLUDE_DIR}/libyuv)
 
 # Creates and names a library, sets it as either STATIC
 # or SHARED, and provides the relative paths to its source code.
@@ -17,7 +18,7 @@ include_directories(${CMAKE_SOURCE_DIR}/src/main/jni/include)
 # Gradle automatically packages shared libraries with your APK.
 
 add_library( # Sets the name of the library.
-             myffmpeg
+             player
 
              # Sets the library as a shared library.
              SHARED
@@ -68,6 +69,11 @@ set_target_properties(swscale
                       PROPERTIES IMPORTED_LOCATION
                       ${LIB_DIR}/${ANDROID_ABI}/libswscale.so)
 
+add_library(yuv SHARED IMPORTED)
+set_target_properties(yuv
+                      PROPERTIES IMPORTED_LOCATION
+                      ${LIB_DIR}/${ANDROID_ABI}/libyuv.so)
+
 # Searches for a specified prebuilt library and stores the path as a
 # variable. Because CMake includes system libraries in the search path by
 # default, you only need to specify the name of the public NDK library
@@ -86,7 +92,7 @@ find_library( # Sets the name of the path variable.
 # build script, prebuilt third-party libraries, or system libraries.
 
 target_link_libraries( # Specifies the target library.
-                       myffmpeg
+                       player
                        avcodec
                        avdevice
                        avfilter
@@ -95,7 +101,10 @@ target_link_libraries( # Specifies the target library.
                        postproc
                        swresample
                        swscale
+                       yuv
 
                        # Links the target library to the log library
                        # included in the NDK.
+                       # 使用native_window需要引入，android这里是简写，也可以仿照log-lib去写
+                       android
                        ${log-lib} )

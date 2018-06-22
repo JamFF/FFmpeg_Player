@@ -1,4 +1,5 @@
 <resources>
     <string name="app_name">FFmpeg4.0_Player</string>
-    <string name="decode">解码</string>
+    <string name="start">start</string>
+    <string name="stop">stop</string>
 </resources>
