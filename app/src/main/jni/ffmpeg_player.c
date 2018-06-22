@@ -27,8 +27,9 @@ Java_com_jamff_ffmpeg_VideoUtils_decode(JNIEnv *env, jclass type, jstring input_
     AVFormatContext *pFormatCtx = avformat_alloc_context();
 
     // 2.打开输入视频文件
-    if (avformat_open_input(&pFormatCtx, input_cstr, NULL, NULL) != 0) {
-        LOG_E("%s", "无法打开输入视频文件");
+    int av_error = avformat_open_input(&pFormatCtx, input_cstr, NULL, NULL);
+    if (av_error != 0) {
+        LOG_E("error:%d, %s,", av_error, "无法打开输入视频文件");
         return;
     }
 
@@ -149,7 +150,7 @@ Java_com_jamff_ffmpeg_VideoUtils_decode(JNIEnv *env, jclass type, jstring input_
                 fwrite(pFrameYUV->data[2], 1, y_size / 4, fp_yuv);
 
                 frame_count++;
-//                LOG_I("解码第%d帧", frame_count);
+                LOG_I("解码第%d帧", frame_count);
             }
         }
 
