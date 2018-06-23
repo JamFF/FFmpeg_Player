@@ -9,6 +9,7 @@ import android.support.v4.app.ActivityCompat;
 import android.support.v7.app.AppCompatActivity;
 import android.util.Log;
 import android.view.Surface;
+import android.view.SurfaceHolder;
 import android.view.View;
 import android.widget.Button;
 import android.widget.Toast;
@@ -17,7 +18,7 @@ import com.jamff.ffmpeg.widget.VideoView;
 
 import java.io.File;
 
-public class MainActivity extends AppCompatActivity implements View.OnClickListener {
+public class MainActivity extends AppCompatActivity implements View.OnClickListener, SurfaceHolder.Callback {
 
     private static final String TAG = "JamFF";
 
@@ -29,11 +30,13 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
             Manifest.permission.WRITE_EXTERNAL_STORAGE};
 
     private VideoView video_view;
-    private Button bt_start;
+    private Button bt_start_1;
+    private Button bt_start_2;
     private Button bt_stop;
 
     private MyPlayer mPlayer;
     private File mFile;
+    private Surface mSurface;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -41,14 +44,14 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         setContentView(R.layout.activity_main);
         initView();
         initData();
+        initEvent();
     }
 
     private void initView() {
         video_view = findViewById(R.id.video_view);
-        bt_start = findViewById(R.id.bt_start);
-        bt_start.setOnClickListener(this);
+        bt_start_1 = findViewById(R.id.bt_start_1);
+        bt_start_2 = findViewById(R.id.bt_start_2);
         bt_stop = findViewById(R.id.bt_stop);
-        bt_stop.setOnClickListener(this);
     }
 
     private void initData() {
@@ -57,30 +60,77 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         mFile = new File(Environment.getExternalStorageDirectory(), INPUT);
     }
 
+    private void initEvent() {
+        video_view.getHolder().addCallback(this);
+        bt_start_1.setOnClickListener(this);
+        bt_start_2.setOnClickListener(this);
+        bt_stop.setOnClickListener(this);
+    }
+
+    @Override
+    public void surfaceCreated(SurfaceHolder holder) {
+        // video_view.getHolder()和holder是一个对象
+        mSurface = holder.getSurface();
+    }
+
+    @Override
+    public void surfaceChanged(SurfaceHolder holder, int format, int width, int height) {
+
+    }
+
+    @Override
+    public void surfaceDestroyed(SurfaceHolder holder) {
+
+    }
+
     @Override
     public void onClick(View v) {
         switch (v.getId()) {
-            case R.id.bt_start:
+            case R.id.bt_start_1:
+                bt_start_1.setEnabled(false);
+                bt_start_2.setEnabled(false);
                 if (mFile.exists()) {
                     bt_stop.setEnabled(true);
-                    start();
+                    play(v.getId());
+                } else {
+                    Toast.makeText(this, mFile.getAbsolutePath() + "文件不存在", Toast.LENGTH_SHORT).show();
+                }
+                break;
+            case R.id.bt_start_2:
+                bt_start_1.setEnabled(false);
+                bt_start_2.setEnabled(false);
+                if (mFile.exists()) {
+                    bt_stop.setEnabled(true);
+                    play(v.getId());
                 } else {
                     Toast.makeText(this, mFile.getAbsolutePath() + "文件不存在", Toast.LENGTH_SHORT).show();
                 }
                 break;
             case R.id.bt_stop:
                 mPlayer.stop();
+                bt_start_1.setEnabled(true);
+                bt_start_2.setEnabled(true);
                 break;
         }
     }
 
-    private void start() {
+    private void play(final int id) {
+        if (mSurface == null) {
+            Log.e(TAG, "start: mSurface == null");
+            return;
+        }
         new Thread(new Runnable() {
             @Override
             public void run() {
-                // Surface传递到Native函数中，用于绘制
-                Surface surface = video_view.getHolder().getSurface();
-                mPlayer.render(mFile.getAbsolutePath(), surface);
+                if (id == R.id.bt_start_1) {
+                    // Surface传递到Native函数中，用于绘制
+                    mPlayer.render(mFile.getAbsolutePath(), mSurface);
+                } else if (id == R.id.bt_start_2) {
+                    // 第二种方式，不使用libyuv
+                    mPlayer.play(mFile.getAbsolutePath(), mSurface);
+                } else {
+                    Log.e(TAG, "start: id error");
+                }
             }
         }).start();
     }
@@ -94,7 +144,8 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
             ActivityCompat.requestPermissions(this, PERMISSIONS_STORAGE, REQUEST_EXTERNAL_STORAGE);
             Log.d(TAG, "checkPermission: 尚未授权");
         } else {
-            bt_start.setEnabled(true);
+            bt_start_1.setEnabled(true);
+            bt_start_2.setEnabled(true);
             Log.d(TAG, "checkPermission: 已经授权");
         }
     }
@@ -104,7 +155,8 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
         if (requestCode == REQUEST_EXTERNAL_STORAGE) {
             if (grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-                bt_start.setEnabled(true);
+                bt_start_1.setEnabled(true);
+                bt_start_2.setEnabled(true);
                 Log.d(TAG, "onRequestPermissionsResult: 接受权限");
             } else {
                 Toast.makeText(this, "未开通文件读写权限", Toast.LENGTH_SHORT).show();
@@ -115,5 +167,11 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
                 }
             }
         }
+    }
+
+    @Override
+    public void onBackPressed() {
+        mPlayer.stop();
+        super.onBackPressed();
     }
 }

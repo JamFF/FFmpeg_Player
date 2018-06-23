@@ -17,11 +17,18 @@
         android:orientation="horizontal">
 
         <Button
-            android:id="@+id/bt_start"
+            android:id="@+id/bt_start_1"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:enabled="false"
-            android:text="@string/start"/>
+            android:text="@string/start_1"/>
+
+        <Button
+            android:id="@+id/bt_start_2"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:enabled="false"
+            android:text="@string/start_2"/>
 
         <Button
             android:id="@+id/bt_stop"

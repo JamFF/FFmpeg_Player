@@ -83,6 +83,7 @@ make install
      * 创建时间：2018/6/21 14:45
      */
     public class VideoView extends SurfaceView {
+
         public VideoView(Context context) {
             this(context, null);
         }
@@ -126,11 +127,18 @@ make install
             android:orientation="horizontal">
 
             <Button
-                android:id="@+id/bt_start"
+                android:id="@+id/bt_start_1"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:enabled="false"
-                android:text="@string/start"/>
+                android:text="@string/start_1"/>
+
+            <Button
+                android:id="@+id/bt_start_2"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:enabled="false"
+                android:text="@string/start_2"/>
 
             <Button
                 android:id="@+id/bt_stop"
@@ -149,13 +157,23 @@ make install
 1. 将文件路径以及Surface传入
 
     ```java
-    private void start() {
+    private void play(final int id) {
+        if (mSurface == null) {
+            Log.e(TAG, "start: mSurface == null");
+            return;
+        }
         new Thread(new Runnable() {
             @Override
             public void run() {
-                // Surface传递到Native函数中，用于绘制
-                Surface surface = video_view.getHolder().getSurface();
-                mPlayer.render(mFile.getAbsolutePath(), surface);
+                if (id == R.id.bt_start_1) {
+                    // Surface传递到Native函数中，用于绘制
+                    mPlayer.render(mFile.getAbsolutePath(), mSurface);
+                } else if (id == R.id.bt_start_2) {
+                    // 第二种方式，不使用libyuv
+                    mPlayer.play(mFile.getAbsolutePath(), mSurface);
+                } else {
+                    Log.e(TAG, "start: id error");
+                }
             }
         }).start();
     }
@@ -166,8 +184,21 @@ make install
     ```java
     public class MyPlayer {
 
+        /**
+         * 使用libyuv将YUV转换为RGB，进行播放
+         * 部分格式播放时，会出现花屏
+         */
         public native void render(String input, Surface surface);
 
+        /**
+         * 使用ffmpeg自带的swscale.h中的sws_scale将解码数据转换为RGB，进行播放
+         * 不会出现花屏
+         */
+        public native int play(String input, Surface surface);
+
+        /**
+         * 停止播放
+         */
         public native void stop();
 
         static {
@@ -386,3 +417,28 @@ target_link_libraries( # Specifies the target library.
                        android
                        ${log-lib} )
 ```
+
+##### 注意
+
+* 播放偏慢问题
+    
+    如果不进行休眠，会导致解码一帧，显示一帧，播放过快，所以根据帧率设置休眠时间，但是由于解码也需要时间，这里播放就会偏慢一点
+
+    ```c
+    // 视频帧率，每秒多少帧
+    double frame_rate = av_q2d(stream->avg_frame_rate);
+    // 间隔是微秒
+    int sleep = (int) (1000 * 1000 / frame_rate);
+    ```
+   
+* 调用`render`方法播放，部分资源会花屏，应该是libyuv使用的有问题，使用`play`方法播放没有问题
+
+* 没有解码音频，播放无声
+
+* 没有进行比例缩放，填充满屏幕
+
+
+参考：
+[Android+FFmpeg+ANativeWindow视频解码播放](https://blog.csdn.net/glouds/article/details/50937266)
+[FFmpeg - time_base,r_frame_rate](https://blog.csdn.net/biezhihua/article/details/62260498)
+[FFMPEG结构体分析：AVStream](https://blog.csdn.net/leixiaohua1020/article/details/14215821)

@@ -12,6 +12,7 @@ import android.view.SurfaceView;
  * 创建时间：2018/6/21 14:45
  */
 public class VideoView extends SurfaceView {
+
     public VideoView(Context context) {
         this(context, null);
     }
