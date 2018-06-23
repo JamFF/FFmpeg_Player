@@ -18,8 +18,8 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
 
     private static final String TAG = "JamFF";
 
-    private static final String INPUT = "input.mp4";
-    private static final String OUTPUT = "output_480x272_yuv420p.yuv";
+    private static final String INPUT = "input_mini.mp4";// 分辨率是480x272
+    private static final String OUTPUT = "output_480x272_yuv420p.yuv";// 根据输入格式的分辨率命名
 
     private static final int REQUEST_EXTERNAL_STORAGE = 1;
     private static String[] PERMISSIONS_STORAGE = {

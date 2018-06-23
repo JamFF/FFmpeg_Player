@@ -35,7 +35,7 @@ Java_com_jamff_ffmpeg_VideoUtils_decode(JNIEnv *env, jclass type, jstring input_
 
     // 3.获取视频文件信息
     if (avformat_find_stream_info(pFormatCtx, NULL) < 0) {
-        LOG_E("%s", "无法获取视频文件信息");
+        LOG_E("无法获取视频文件信息");
         return;
     }
 
@@ -53,32 +53,44 @@ Java_com_jamff_ffmpeg_VideoUtils_decode(JNIEnv *env, jclass type, jstring input_
     }
 
     if (video_stream_idx == -1) {
-        LOG_E("%s", "找不到视频流\n");
+        LOG_E("找不到视频流");
         return;
     }
 
+    // 视频对应的AVStream
+    AVStream *stream = pFormatCtx->streams[video_stream_idx];
+
+    // 视频帧率，每秒多少帧
+    double frame_rate = av_q2d(stream->avg_frame_rate);
+    LOG_I("帧率 = %f", frame_rate);
+
     // 只有知道视频的编码方式，才能够根据编码方式去找到解码器
     // 获取视频流中的编解码上下文
-    AVCodecContext *pCodecCtx = pFormatCtx->streams[video_stream_idx]->codec;
+    AVCodecContext *pCodecCtx = stream->codec;
     // 4.根据编解码上下文中的编码id查找对应的视频解码器
     AVCodec *pCodec = avcodec_find_decoder(pCodecCtx->codec_id);
     // 例如加密或者没有该编码的解码器
     if (pCodec == NULL) {
         // 迅雷看看，找不到解码器，临时下载一个解码器
-        LOG_E("%s", "找不到解码器\n");
+        LOG_E("找不到解码器");
         return;
     }
 
     // 5.打开解码器
     if (avcodec_open2(pCodecCtx, pCodec, NULL) < 0) {
-        LOG_E("%s", "解码器无法打开\n");
+        LOG_E("解码器无法打开");
         return;
     }
 
+    // 获取视频宽高
+    int videoWidth = pCodecCtx->width;
+    int videoHeight = pCodecCtx->height;
+
     // 输出视频信息
     LOG_I("视频的文件格式：%s", pFormatCtx->iformat->name);
-    LOG_I("视频时长：%lld", (pFormatCtx->duration) / 1000000);
-    LOG_I("视频的宽高：%d,%d", pCodecCtx->width, pCodecCtx->height);
+    LOG_I("视频时长：%lld, %f", (pFormatCtx->duration) / 1000000,
+          stream->duration * av_q2d(stream->time_base));
+    LOG_I("视频的宽高：%d, %d", videoWidth, videoHeight);
     LOG_I("解码器的名称：%s", pCodec->name);
 
     // 准备读取
@@ -95,19 +107,18 @@ Java_com_jamff_ffmpeg_VideoUtils_decode(JNIEnv *env, jclass type, jstring input_
     // 只有指定了AVFrame的像素格式、画面大小才能真正分配内存
     // 缓冲区分配内存
     uint8_t *out_buffer = (uint8_t *) av_malloc(
-            avpicture_get_size(AV_PIX_FMT_YUV420P, pCodecCtx->width, pCodecCtx->height));
+            avpicture_get_size(AV_PIX_FMT_YUV420P, videoWidth, videoHeight));
     // 初始化缓冲区
-    avpicture_fill((AVPicture *) pFrameYUV, out_buffer, AV_PIX_FMT_YUV420P, pCodecCtx->width,
-                   pCodecCtx->height);
+    avpicture_fill((AVPicture *) pFrameYUV, out_buffer, AV_PIX_FMT_YUV420P,
+                   videoWidth, videoHeight);
 
     // 用于像素格式转码（缩放）的参数，转之前的宽高，转之后的宽高，格式等
-    struct SwsContext *sws_ctx = sws_getContext(pCodecCtx->width, pCodecCtx->height,// 原始画面宽高
+    struct SwsContext *sws_ctx = sws_getContext(videoWidth, videoHeight,// 原始画面宽高
                                                 pCodecCtx->pix_fmt,// 原始画面像素格式
-                                                pCodecCtx->width, pCodecCtx->height,// 目标画面宽高
+                                                videoWidth, videoHeight,// 目标画面宽高
                                                 AV_PIX_FMT_YUV420P,// 目标画面像素格式
-                                                SWS_BILINEAR, // 算法
+                                                SWS_BILINEAR,// 算法
                                                 NULL, NULL, NULL);
-
 
     int got_picture, ret;
 
@@ -123,7 +134,7 @@ Java_com_jamff_ffmpeg_VideoUtils_decode(JNIEnv *env, jclass type, jstring input_
             // 7.解码一帧视频压缩数据，得到视频像素数据，AVPacket->AVFrame
             ret = avcodec_decode_video2(pCodecCtx, pFrame, &got_picture, packet);
             if (ret < 0) {
-                LOG_E("%s", "解码错误");
+                LOG_E("解码错误");
                 return;
             }
 
@@ -134,23 +145,23 @@ Java_com_jamff_ffmpeg_VideoUtils_decode(JNIEnv *env, jclass type, jstring input_
                 // 3 7输入、输出画面一行的数据的大小 AVFrame 转换是一行一行转换的
                 // 4 输入数据第一列要转码的位置 从0开始
                 // 5 输入画面的高度
-                sws_scale(sws_ctx,
-                          pFrame->data, pFrame->linesize,
-                          0, pCodecCtx->height,// 也可以使用pFrame->height，值相等
+                sws_scale(sws_ctx, pFrame->data,
+                          pFrame->linesize, 0, videoHeight,// 也可以使用pFrame->height，值相等
                           pFrameYUV->data, pFrameYUV->linesize);
 
                 // 输出到YUV文件
                 // AVFrame像素帧写入文件->YUV
                 // data解码后的图像像素数据（音频采样数据）
-                int y_size = pCodecCtx->width * pCodecCtx->height;
+                int y_size = videoWidth * videoHeight;
                 // Y 亮度 UV 色度（压缩了） 人对亮度更加敏感
                 // 一个像素包含了一个Y，而U V 个数是Y的1/4
                 fwrite(pFrameYUV->data[0], 1, y_size, fp_yuv);
                 fwrite(pFrameYUV->data[1], 1, y_size / 4, fp_yuv);
                 fwrite(pFrameYUV->data[2], 1, y_size / 4, fp_yuv);
 
-                frame_count++;
-                LOG_I("解码第%d帧", frame_count);
+                double cur_time = packet->pts * av_q2d(stream->time_base);
+                // double cur_time = pFrame->pts * av_q2d(stream->time_base);// 值相等，拷贝自AVPacket的pts
+                LOG_I("解码%d帧, %f秒", ++frame_count, cur_time);
             }
         }
 
@@ -160,6 +171,12 @@ Java_com_jamff_ffmpeg_VideoUtils_decode(JNIEnv *env, jclass type, jstring input_
 
     // 关闭文件
     fclose(fp_yuv);
+
+    // 释放SwsContext
+    sws_freeContext(sws_ctx);
+
+    // 释放缓冲区
+    av_free(out_buffer);
 
     // 释放AVFrame
     av_frame_free(&pFrame);
