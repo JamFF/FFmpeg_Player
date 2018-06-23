@@ -1,5 +1,5 @@
 # FFmpeg_Player
-在NDK r17环境下，使用新脚本，编译FFmpeg4.0动态库，使用FFmpeg将MP4解码YUV
+在NDK r17环境下，使用新脚本，编译FFmpeg4.0动态库，使用FFmpeg最新API将MP4解码YUV
 
 ```
 #!/bin/bash
@@ -50,3 +50,10 @@ make install
 ```
 
 对比ffmpeg4_so的脚本，编译结果少了libpostproc模块，添加--enable-gpl编译即可
+
+参考
+[FFmpeg Documentation](http://ffmpeg.org/doxygen/trunk/index.html)
+[FFmpeg新旧接口对照使用笔记](https://blog.csdn.net/zhangwu1241/article/details/53183590)
+[ffmpeg 新老接口问题及对照集锦](https://blog.csdn.net/sukhoi27smk/article/details/18842725)
+[用AVCodecParameters代替AVCodecContext](https://blog.csdn.net/luotuo44/article/details/54981809)
+[ffmpeg api升级到3.3 api变化](https://www.cnblogs.com/elesos/p/6866599.html)
