@@ -72,7 +72,7 @@ make install
 7. ANativeWindow_unlock
 8. 释放ANativeWindow资源
 
-##### 绘制UI
+##### UI
 
 1. 绘制到UI上，需要使用`SurfaceView`
 
@@ -152,7 +152,7 @@ make install
     </FrameLayout>
     ```
 
-##### 绘制UI
+##### 绘制
 
 1. 将文件路径以及Surface传入
 
@@ -442,3 +442,5 @@ target_link_libraries( # Specifies the target library.
 [Android+FFmpeg+ANativeWindow视频解码播放](https://blog.csdn.net/glouds/article/details/50937266)
 [FFmpeg - time_base,r_frame_rate](https://blog.csdn.net/biezhihua/article/details/62260498)
 [FFMPEG结构体分析：AVStream](https://blog.csdn.net/leixiaohua1020/article/details/14215821)
+[ffmpeg time_base](http://www.cnitblog.com/luofuchong/archive/2014/11/28/89869.html)
+[ffmpeg中的时间](https://www.cnblogs.com/yinxiangpei/articles/3892982.html)

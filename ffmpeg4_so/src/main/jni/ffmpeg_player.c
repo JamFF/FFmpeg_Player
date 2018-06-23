@@ -14,7 +14,7 @@
 // 像素处理
 #include <libswscale/swscale.h>
 
-// 使用av_image...代替过时的avpicture...
+// 编解码，使用av_image...代替libavcodec/avcodec.h中过时的avpicture...
 #include <libavutil/imgutils.h>
 
 // 使用libyuv，将YUV转换RGB
