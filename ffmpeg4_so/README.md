@@ -2,6 +2,7 @@
 在NDK r17环境下，使用老脚本，编译FFmpeg4.0动态库，使用FFmpeg将MP4解码YUV，转为RGB并绘制到UI
 
 ##### 编译armeabi-v7a的脚本
+
 ```
 #!/bin/bash
 #shell脚本第一行必须是指定shell脚本解释器，这里使用的是bash解释器
