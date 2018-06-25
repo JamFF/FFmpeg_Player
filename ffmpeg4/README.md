@@ -1,5 +1,5 @@
 # FFmpeg_Player
-在NDK r17环境下，使用新脚本，编译FFmpeg4.0静态库
+在NDK r17b环境下，使用新脚本，编译FFmpeg4.0.1静态库
 
 ```
 #!/bin/bash
@@ -7,7 +7,7 @@
 
 #一系列命令的集合 cd xx;dir
 
-#ndk r17
+#ndk r17b
 
 make clean
 
@@ -21,7 +21,7 @@ make clean
 #--disable-programs 关闭程序的编译 ffmpeg ffplay
 #--extra-cflags 给编译的参数
 
-export NDK=/usr/ndk/android-ndk-r17
+export NDK=/usr/ndk/android-ndk-r17b
 export SYSROOT=$NDK/platforms/android-21/arch-arm/
 export TOOLCHAIN=$NDK/toolchains/arm-linux-androideabi-4.9/prebuilt/linux-x86_64
 export CPU=arm

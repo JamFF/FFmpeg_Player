@@ -9,6 +9,8 @@ public class VideoUtils {
 
     public native static void decode(String input, String output);
 
+    public native static String version();
+
     static {
         System.loadLibrary("myffmpeg");
     }

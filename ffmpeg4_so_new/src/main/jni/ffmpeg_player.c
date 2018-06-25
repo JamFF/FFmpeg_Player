@@ -93,7 +93,7 @@ Java_com_jamff_ffmpeg_VideoUtils_decode(JNIEnv *env, jclass type, jstring input_
 
     // 输出视频信息
     LOG_I("视频的文件格式：%s", pFormatCtx->iformat->name);
-    LOG_I("视频时长：%lld, %f", (pFormatCtx->duration) / 1000000,
+    LOG_I("视频时长：%f, %f", (pFormatCtx->duration) / 1000000.0,
           stream->duration * av_q2d(stream->time_base));
     LOG_I("视频的宽高：%d, %d", videoWidth, videoHeight);
     LOG_I("解码器的名称：%s", pCodec->name);
@@ -213,4 +213,9 @@ Java_com_jamff_ffmpeg_VideoUtils_decode(JNIEnv *env, jclass type, jstring input_
 
     (*env)->ReleaseStringUTFChars(env, input_jstr, input_cstr);
     (*env)->ReleaseStringUTFChars(env, output_jstr, output_cstr);
+}
+
+JNIEXPORT jstring JNICALL
+Java_com_jamff_ffmpeg_VideoUtils_version(JNIEnv *env, jclass type) {
+    return (*env)->NewStringUTF(env, av_version_info());
 }

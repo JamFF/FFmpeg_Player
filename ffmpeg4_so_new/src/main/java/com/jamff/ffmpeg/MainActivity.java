@@ -15,7 +15,8 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
     private static final String OUTPUT = new File(Environment.getExternalStorageDirectory(), "output_480x272_yuv420p.yuv").getAbsolutePath();
 
     private Button bt_decode;
-    private TextView tv;
+    private TextView tv_version;
+    private TextView tv_hint;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -26,24 +27,27 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
     }
 
     private void initView() {
-        tv = findViewById(R.id.sample_text);
+        tv_version = findViewById(R.id.tv_version);
+        tv_hint = findViewById(R.id.tv_hint);
         bt_decode = findViewById(R.id.bt_decode);
         bt_decode.setOnClickListener(this);
     }
 
     private void initData() {
+        tv_version.setText(VideoUtils.version());
+
         File inputFile = new File(INPUT);
         File outputFile = new File(OUTPUT);
         if (inputFile.exists()) {
             if (outputFile.exists()) {
                 bt_decode.setEnabled(false);
-                tv.setText("解码文件已存在");
+                tv_hint.setText("解码文件已存在");
                 bt_decode.setText("解码完成");
             } else {
                 bt_decode.setEnabled(true);
             }
         } else {
-            tv.setText(String.format("%s文件不存在", INPUT));
+            tv_hint.setText(String.format("%s文件不存在", INPUT));
         }
     }
 
