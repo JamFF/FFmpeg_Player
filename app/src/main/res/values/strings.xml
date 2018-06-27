@@ -1,4 +1,5 @@
 <resources>
-    <string name="app_name">FFmpeg_Player</string>
-    <string name="decode">解码</string>
+    <string name="app_name">FFmpeg_Decode</string>
+    <string name="video_decode">视频解码</string>
+    <string name="audio_decode">音频解码</string>
 </resources>
