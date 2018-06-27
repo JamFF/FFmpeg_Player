@@ -105,10 +105,6 @@ Java_com_jamff_ffmpeg_DecodeUtils_decodeAudio(JNIEnv *env, jclass type, jstring 
         return -1;
     }
 
-    // pFrame->16bit 44100Hz PCM，统一音频采样格式与采样率
-    // 采样率是在一秒钟内对声音信号的采样次数
-    // TODO
-
     // 创建重采样上下文
     SwrContext *swrCtx = swr_alloc();
     if (swrCtx == NULL) {
@@ -120,10 +116,10 @@ Java_com_jamff_ffmpeg_DecodeUtils_decodeAudio(JNIEnv *env, jclass type, jstring 
     // 输出的声道布局（立体声）
     uint64_t out_ch_layout = AV_CH_LAYOUT_STEREO;
 
-    // 输出采样格式16bit
+    // 输出采样格式，16bit
     enum AVSampleFormat out_sample_fmt = AV_SAMPLE_FMT_S16;
 
-    // 输出采样率
+    // 输出采样率，44100Hz，在一秒钟内对声音信号采样44100次
     int out_sample_rate = 44100;
 
     // 输入的声道布局

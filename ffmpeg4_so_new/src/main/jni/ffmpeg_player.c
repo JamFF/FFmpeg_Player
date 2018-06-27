@@ -20,8 +20,8 @@ Java_com_jamff_ffmpeg_VideoUtils_decode(JNIEnv *env, jclass type, jstring input_
     const char *input_cstr = (*env)->GetStringUTFChars(env, input_jstr, 0);
     const char *output_cstr = (*env)->GetStringUTFChars(env, output_jstr, 0);
 
-    // 1.注册所有组件
-    avformat_network_init();// av_register_all()不使用libavformat的网络功能
+    // 1.注册所有组件。已废弃，新版本中不需要调用
+    // av_register_all();
 
     // 封装格式上下文，统领全局的结构体，保存了视频文件封装格式的相关信息
     AVFormatContext *pFormatCtx = avformat_alloc_context();
@@ -69,17 +69,17 @@ Java_com_jamff_ffmpeg_VideoUtils_decode(JNIEnv *env, jclass type, jstring input_
     AVCodecParameters *pCodecParam = stream->codecpar;
     // 根据AVCodecParameters中的编码id查找对应的视频解码器
     AVCodec *pCodec = avcodec_find_decoder(pCodecParam->codec_id);
-    // 初始化编解码上下文
-    AVCodecContext *pCodecCtx = avcodec_alloc_context3(pCodec);// 需要使用avcodec_free_context释放
-    // 这里是直接从AVCodecParameters复制到AVCodecContext
-    avcodec_parameters_to_context(pCodecCtx, pCodecParam);
-
     // 例如加密或者没有该编码的解码器
     if (pCodec == NULL) {
         // 迅雷看看，找不到解码器，临时下载一个解码器
         LOG_E("找不到解码器");
         return;
     }
+
+    // 初始化编解码上下文
+    AVCodecContext *pCodecCtx = avcodec_alloc_context3(pCodec);// 需要使用avcodec_free_context释放
+    // 这里是直接从AVCodecParameters复制到AVCodecContext
+    avcodec_parameters_to_context(pCodecCtx, pCodecParam);
 
     // 5.打开解码器
     if (avcodec_open2(pCodecCtx, pCodec, NULL) < 0) {
@@ -206,10 +206,7 @@ Java_com_jamff_ffmpeg_VideoUtils_decode(JNIEnv *env, jclass type, jstring input_
     avcodec_free_context(&pCodecCtx);
 
     // 释放AVFormatContext
-    avformat_free_context(pFormatCtx);
-
-    // 反注册所有组件
-    avformat_network_deinit();
+    avformat_close_input(&pFormatCtx);
 
     (*env)->ReleaseStringUTFChars(env, input_jstr, input_cstr);
     (*env)->ReleaseStringUTFChars(env, output_jstr, output_cstr);

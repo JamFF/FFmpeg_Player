@@ -8,7 +8,7 @@
 
 在android-21之前不支持arm64架构，这里只编译arm架构
 
-```
+```bash
 #!/bin/bash
 make clean
 export NDK=/usr/ndk/android-ndk-r10e
@@ -262,10 +262,10 @@ public native static int decodeAudio(String input, String output);
             // 输出的声道布局（立体声）
             uint64_t out_ch_layout = AV_CH_LAYOUT_STEREO;
         
-            // 输出采样格式16bit
+            // 输出采样格式，16bit
             enum AVSampleFormat out_sample_fmt = AV_SAMPLE_FMT_S16;
         
-            // 输出采样率
+            // 输出采样率，44100Hz，在一秒钟内对声音信号采样44100次
             int out_sample_rate = 44100;
         
             // 输入的声道布局
@@ -694,6 +694,20 @@ public native static int decodeVideo(String input, String output);
     (*env)->ReleaseStringUTFChars(env, input_jstr, input_cstr);
     (*env)->ReleaseStringUTFChars(env, output_jstr, output_cstr);
     ```
+    
+### 注意
+
+解码音频中，第一帧会返回错误码，目前没有找到解决方案
+
+```c
+// 解码一帧音频压缩数据，得到音频PCM数据，AVPacket->AVFrame
+ret = avcodec_decode_audio4(pCodecCtx, pFrame, &got_frame, packet);
+if (ret < 0) {
+    LOG_E("解码错误 %d", ret);
+    // FIXME 第一帧会返回-1094995529，AVERROR_INVALIDDATA
+    // return -1;
+}
+```
 
 ### 参考
 

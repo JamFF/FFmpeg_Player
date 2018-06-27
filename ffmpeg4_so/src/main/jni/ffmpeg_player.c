@@ -31,7 +31,6 @@ Java_com_jamff_ffmpeg_MyPlayer_render(JNIEnv *env, jobject instance, jstring inp
                                       jobject surface) {
     LOG_I("render");
 
-    // 需要转码的视频文件(输入的视频文件)
     const char *input_cstr = (*env)->GetStringUTFChars(env, input_jstr, 0);
 
     // 1.注册所有组件
@@ -55,9 +54,9 @@ Java_com_jamff_ffmpeg_MyPlayer_render(JNIEnv *env, jobject instance, jstring inp
 
     // 视频解码，需要找到视频对应的AVStream所在pFormatCtx->streams的索引位置
     int video_stream_idx = -1;
-    int i = 0;
+    int i;
     // 遍历所有类型的流（音频流、视频流、字幕流）
-    for (; i < pFormatCtx->nb_streams; i++) {
+    for (i = 0; i < pFormatCtx->nb_streams; i++) {
         // 根据类型判断，找到视频流
         if (pFormatCtx->streams[i]->codecpar->codec_type == AVMEDIA_TYPE_VIDEO) {
             // 获取视频流的索引位置
@@ -79,9 +78,10 @@ Java_com_jamff_ffmpeg_MyPlayer_render(JNIEnv *env, jobject instance, jstring inp
     LOG_I("帧率 = %f", frame_rate);
 
     // 只有知道视频的编码方式，才能够根据编码方式去找到解码器
-    // 获取视频流中的编解码上下文
+    // 4.获取视频流中的编解码器上下文
     AVCodecContext *pCodecCtx = stream->codec;
-    // 4.根据编解码上下文中的编码id查找对应的视频解码器
+
+    // 5.根据编解码上下文中的编码id查找对应的视频解码器
     AVCodec *pCodec = avcodec_find_decoder(pCodecCtx->codec_id);
     // 例如加密或者没有该编码的解码器
     if (pCodec == NULL) {
@@ -90,7 +90,7 @@ Java_com_jamff_ffmpeg_MyPlayer_render(JNIEnv *env, jobject instance, jstring inp
         return;
     }
 
-    // 5.打开解码器
+    // 6.打开解码器
     if (avcodec_open2(pCodecCtx, pCodec, NULL) < 0) {
         LOG_E("解码器无法打开");
         return;
@@ -102,7 +102,7 @@ Java_com_jamff_ffmpeg_MyPlayer_render(JNIEnv *env, jobject instance, jstring inp
 
     // 输出视频信息
     LOG_I("视频的文件格式：%s", pFormatCtx->iformat->name);
-    LOG_I("视频时长：%lld, %f", (pFormatCtx->duration) / 1000000,
+    LOG_I("视频时长：%f, %f", (pFormatCtx->duration) / 1000000.0,
           stream->duration * av_q2d(stream->time_base));
     LOG_I("视频的宽高：%d, %d", videoWidth, videoHeight);
     LOG_I("解码器的名称：%s", pCodec->name);
@@ -137,11 +137,11 @@ Java_com_jamff_ffmpeg_MyPlayer_render(JNIEnv *env, jobject instance, jstring inp
     // 间隔是微秒
     int sleep = (int) (1000 * 1000 / frame_rate);
 
-    // 6.一帧一帧的读取压缩视频数据AVPacket
+    // 7.一帧一帧的读取压缩视频数据AVPacket
     while (av_read_frame(pFormatCtx, packet) >= 0 && flag == 0) {
         // 只要视频压缩数据（根据流的索引位置判断）
         if (packet->stream_index == video_stream_idx) {
-            // 7.解码一帧视频压缩数据，得到视频像素数据，AVPacket->AVFrame
+            // 8.解码一帧视频压缩数据，得到视频像素数据，AVPacket->AVFrame
             ret = avcodec_decode_video2(pCodecCtx, pFrame, &got_picture, packet);
             if (ret < 0) {
                 LOG_E("解码错误");
@@ -155,6 +155,7 @@ Java_com_jamff_ffmpeg_MyPlayer_render(JNIEnv *env, jobject instance, jstring inp
                 // double cur_time = pFrame->pts * av_q2d(stream->time_base);// 值相等，拷贝自AVPacket的pts
                 LOG_I("解码%d帧, %f秒", ++frame_count, cur_time);
 
+                // 9. 绘制
                 // 3、lock锁定下一个即将要绘制的Surface
                 ANativeWindow_lock(nativeWindow, &outBuffer, NULL);
 
@@ -203,7 +204,6 @@ Java_com_jamff_ffmpeg_MyPlayer_play(JNIEnv *env, jobject instance, jstring input
                                     jobject surface) {
     LOG_I("play");
 
-    // 需要转码的视频文件(输入的视频文件)
     const char *input_cstr = (*env)->GetStringUTFChars(env, input_, 0);
 
     // 1.注册所有组件
@@ -250,9 +250,10 @@ Java_com_jamff_ffmpeg_MyPlayer_play(JNIEnv *env, jobject instance, jstring input
     LOG_I("帧率 = %f", frame_rate);
 
     // 只有知道视频的编码方式，才能够根据编码方式去找到解码器
-    // 获取视频流中的编解码上下文
+    // 4.获取视频流中的编解码器上下文
     AVCodecContext *pCodecCtx = stream->codec;
-    // 4.根据编解码上下文中的编码id查找对应的视频解码器
+
+    // 5.根据编解码上下文中的编码id查找对应的视频解码器
     AVCodec *pCodec = avcodec_find_decoder(pCodecCtx->codec_id);
     // 例如加密或者没有该编码的解码器
     if (pCodec == NULL) {
@@ -261,7 +262,7 @@ Java_com_jamff_ffmpeg_MyPlayer_play(JNIEnv *env, jobject instance, jstring input
         return -1;
     }
 
-    // 5.打开解码器
+    // 6.打开解码器
     if (avcodec_open2(pCodecCtx, pCodec, NULL) < 0) {
         LOG_E("Could not open codec");
         return -1;
@@ -274,7 +275,7 @@ Java_com_jamff_ffmpeg_MyPlayer_play(JNIEnv *env, jobject instance, jstring input
     // 输出视频信息
     // 输出视频信息
     LOG_I("视频的文件格式：%s", pFormatCtx->iformat->name);
-    LOG_I("视频时长：%lld, %f", (pFormatCtx->duration) / 1000000,
+    LOG_I("视频时长：%f, %f", (pFormatCtx->duration) / 1000000.0,
           stream->duration * av_q2d(stream->time_base));
     LOG_I("视频的宽高：%d, %d", videoWidth, videoHeight);
     LOG_I("解码器的名称：%s", pCodec->name);
@@ -286,12 +287,25 @@ Java_com_jamff_ffmpeg_MyPlayer_play(JNIEnv *env, jobject instance, jstring input
     // AVFrame，像素数据（解码数据），用于存储解码后的像素数据(YUV)
     // 内存分配
     AVFrame *pFrame = av_frame_alloc();// 实际就是YUV420P
+
+    /************************************* native绘制 start *************************************/
     // RGB，用于渲染
     AVFrame *pRGBFrame = av_frame_alloc();
     if (pRGBFrame == NULL || pFrame == NULL) {
         LOG_E("Could not allocate video frame");
         return -1;
     }
+
+    // 1、获取一个关联Surface的NativeWindow窗体
+    ANativeWindow *nativeWindow = ANativeWindow_fromSurface(env, surface);
+    // 2、设置native window的buffer大小，可自动拉伸
+    ANativeWindow_setBuffersGeometry(nativeWindow, videoWidth, videoHeight,
+                                     WINDOW_FORMAT_RGBA_8888);
+    // 绘制时的缓冲区
+    ANativeWindow_Buffer windowBuffer;
+
+    flag = 0;
+    /************************************* native绘制 end ***************************************/
 
     // av_image_get_buffer_size代替过时的avpicture_get_size
     int numBytes = av_image_get_buffer_size(AV_PIX_FMT_RGBA, videoWidth, videoHeight, 1);
@@ -309,17 +323,6 @@ Java_com_jamff_ffmpeg_MyPlayer_play(JNIEnv *env, jobject instance, jstring input
                                                 SWS_BILINEAR,// 算法
                                                 NULL, NULL, NULL);
 
-    // 获取一个关联Surface的NativeWindow窗体
-    ANativeWindow *nativeWindow = ANativeWindow_fromSurface(env, surface);
-
-    // 设置native window的buffer大小，可自动拉伸
-    ANativeWindow_setBuffersGeometry(nativeWindow, videoWidth, videoHeight,
-                                     WINDOW_FORMAT_RGBA_8888);
-    // 绘制时的缓冲区
-    ANativeWindow_Buffer windowBuffer;
-
-    flag = 0;
-
     int got_picture, ret;
 
     int frame_count = 0;
@@ -327,12 +330,11 @@ Java_com_jamff_ffmpeg_MyPlayer_play(JNIEnv *env, jobject instance, jstring input
     // 间隔是微秒
     int sleep = (int) (1000 * 1000 / frame_rate);
 
-    // 一帧一帧的读取压缩视频数据AVPacket
+    // 7.一帧一帧的读取压缩视频数据AVPacket
     while (av_read_frame(pFormatCtx, &packet) >= 0 && flag == 0) {
         // 只要视频压缩数据（根据流的索引位置判断）
         if (packet.stream_index == video_stream_idx) {
-
-            // 解码一帧视频压缩数据，得到视频像素数据，AVPacket->AVFrame
+            // 8.解码一帧视频压缩数据，得到视频像素数据，AVPacket->AVFrame
             ret = avcodec_decode_video2(pCodecCtx, pFrame, &got_picture, &packet);
             if (ret < 0) {
                 LOG_E("解码错误");
@@ -346,10 +348,11 @@ Java_com_jamff_ffmpeg_MyPlayer_play(JNIEnv *env, jobject instance, jstring input
                 // double cur_time = pFrame->pts * av_q2d(stream->time_base);// 值相等，拷贝自AVPacket的pts
                 LOG_I("解码%d帧, %f秒", ++frame_count, cur_time);
 
-                // lock锁定下一个即将要绘制的Surface
-                ANativeWindow_lock(nativeWindow, &windowBuffer, 0);
+                // 9. 绘制
+                // 3、lock锁定下一个即将要绘制的Surface
+                ANativeWindow_lock(nativeWindow, &windowBuffer, NULL);
 
-                // 格式转换
+                // 4、格式转换
                 sws_scale(sws_ctx, (uint8_t const *const *) pFrame->data,
                           pFrame->linesize, 0, videoHeight,
                           pRGBFrame->data, pRGBFrame->linesize);
@@ -360,13 +363,13 @@ Java_com_jamff_ffmpeg_MyPlayer_play(JNIEnv *env, jobject instance, jstring input
                 uint8_t *src = pRGBFrame->data[0];
                 int srcStride = pRGBFrame->linesize[0];
 
-                // 由于window的stride和帧的stride不同，因此需要逐行复制
+                // 5、由于window的stride和帧的stride不同，因此需要逐行复制
                 int h;
                 for (h = 0; h < videoHeight; h++) {
                     memcpy(dst + h * dstStride, src + h * srcStride, srcStride);
                 }
 
-                // unlock绘制
+                // 6、unlock绘制
                 ANativeWindow_unlockAndPost(nativeWindow);
 
                 // FIXME 由于解码需要时间，这样设置播放会偏慢，目前没有解决方式
@@ -388,8 +391,8 @@ Java_com_jamff_ffmpeg_MyPlayer_play(JNIEnv *env, jobject instance, jstring input
     av_free(buffer);
 
     // 释放AVFrame
-    av_free(pFrame);
-    av_free(pRGBFrame);
+    av_frame_free(&pFrame);
+    av_frame_free(&pRGBFrame);
 
     // 关闭解码器
     avcodec_close(pCodecCtx);

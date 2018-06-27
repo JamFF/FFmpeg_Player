@@ -1,9 +1,12 @@
-# FFmpeg_Player
-在NDK r17环境下，使用老脚本，编译FFmpeg4.0动态库，使用FFmpeg将MP4解码YUV，转为RGB并绘制到UI
+# 像素格式转换与Native原生绘制
+1. 在NDK r17环境下，使用老脚本，编译FFmpeg4.0动态库
+2. 将MP4解码YUV，转为RGB并绘制到UI
+
+### Linux下FFmpeg编译脚本
 
 ##### 编译armeabi-v7a的脚本
 
-```
+```bash
 #!/bin/bash
 #shell脚本第一行必须是指定shell脚本解释器，这里使用的是bash解释器
 
@@ -61,7 +64,7 @@ make install
 
 ##### 编译arm64-v8a的脚本
 
-```
+```bash
 #!/bin/bash
 #shell脚本第一行必须是指定shell脚本解释器，这里使用的是bash解释器
 
@@ -117,7 +120,7 @@ make
 make install 
 ```
 
-##### 思路整理
+### 思路整理
 1. SurfaceView创建完成时，打开文件，打开线程
 2. NDK中初始化，通过ANativeWindow绘制
 3. 得到ANativeWindow
@@ -126,6 +129,8 @@ make install
 6. 给缓冲区赋值，将YUV转为RGB
 7. ANativeWindow_unlock
 8. 释放ANativeWindow资源
+
+### 实现步骤
 
 ##### UI
 
@@ -238,24 +243,30 @@ make install
 
     ```java
     public class MyPlayer {
-
+    
         /**
          * 使用libyuv将YUV转换为RGB，进行播放
          * 部分格式播放时，会出现花屏
+         *
+         * @param input   输入视频路径
+         * @param surface {@link android.view.Surface}
          */
         public native void render(String input, Surface surface);
-
+    
         /**
          * 使用ffmpeg自带的swscale.h中的sws_scale将解码数据转换为RGB，进行播放
          * 不会出现花屏
+         *
+         * @param input   输入视频路径
+         * @param surface {@link android.view.Surface}
          */
         public native int play(String input, Surface surface);
-
+    
         /**
          * 停止播放
          */
         public native void stop();
-
+    
         static {
             System.loadLibrary("player");
         }
@@ -289,21 +300,70 @@ make install
         ANativeWindow_lock(nativeWindow, &outBuffer, NULL);
         ```
 
-    5. 写入缓冲区，这里需要下面引入libyuv
-       ```c
-       // 读取帧画面放入缓冲区，指定RGB的AVFrame的像素格式、宽高和缓冲区
-       avpicture_fill((AVPicture *) pRGBFrame,
-                      outBuffer.bits,// 转换RGB的缓冲区，就使用绘制时的缓冲区，即可完成Surface绘制
-                      AV_PIX_FMT_RGBA,// 像素格式
+    5. 格式转换，两种方式
+    
+        * 使用`libyuv`
+        
+            ```c
+            // 读取帧画面放入缓冲区，指定RGB的AVFrame的像素格式、宽高和缓冲区
+            avpicture_fill((AVPicture *) pRGBFrame,
+                          outBuffer.bits,// 转换RGB的缓冲区，就使用绘制时的缓冲区，即可完成Surface绘制
+                          AV_PIX_FMT_RGBA,// 像素格式
+                          pCodecCtx->width, pCodecCtx->height);
+            
+            // 将YUV420P->RGBA_8888
+            I420ToARGB(pFrame->data[0], pFrame->linesize[0],// Y
+                      pFrame->data[2], pFrame->linesize[2],// V
+                      pFrame->data[1], pFrame->linesize[1],// U
+                      pRGBFrame->data[0], pRGBFrame->linesize[0],
                       pCodecCtx->width, pCodecCtx->height);
+            ```
+            
+        * 使用`sws_scale()`
+        
+            1. 创建SwsContext
+            
+                ```c
+                // av_image_get_buffer_size代替过时的avpicture_get_size
+                int numBytes = av_image_get_buffer_size(AV_PIX_FMT_RGBA, videoWidth, videoHeight, 1);
+                // 缓冲区分配内存
+                uint8_t *buffer = av_malloc(numBytes * sizeof(uint8_t));
+                // 初始化缓冲区，av_image_fill_arrays替代过时的avpicture_fill
+                av_image_fill_arrays(pRGBFrame->data, pRGBFrame->linesize, buffer, AV_PIX_FMT_RGBA,
+                                     videoWidth, videoHeight, 1);
+            
+                // 由于解码出来的帧格式不是RGBA的，在渲染之前需要进行格式转换
+                struct SwsContext *sws_ctx = sws_getContext(videoWidth, videoHeight,// 原始画面宽高
+                                                            pCodecCtx->pix_fmt,// 原始画面像素格式
+                                                            videoWidth, videoHeight,// 目标画面宽高
+                                                            AV_PIX_FMT_RGBA,// 目标画面像素格式
+                                                            SWS_BILINEAR,// 算法
+                                                            NULL, NULL, NULL);
+                ```
+            
+            2. 格式转换
+            
+                ```c
+                sws_scale(sws_ctx, (uint8_t const *const *) pFrame->data,
+                          pFrame->linesize, 0, videoHeight,
+                          pRGBFrame->data, pRGBFrame->linesize);
+                ```
+            
+            3. 逐行复制
+            
+                ```c
+                // 获取stride
+                uint8_t *dst = windowBuffer.bits;
+                int dstStride = windowBuffer.stride * 4;
+                uint8_t *src = pRGBFrame->data[0];
+                int srcStride = pRGBFrame->linesize[0];
 
-       // 将YUV420P->RGBA_8888
-       I420ToARGB(pFrame->data[0], pFrame->linesize[0],// Y
-                  pFrame->data[2], pFrame->linesize[2],// V
-                  pFrame->data[1], pFrame->linesize[1],// U
-                  pRGBFrame->data[0], pRGBFrame->linesize[0],
-                  pCodecCtx->width, pCodecCtx->height);
-       ```
+                // 由于window的stride和帧的stride不同，因此需要逐行复制
+                int h;
+                for (h = 0; h < videoHeight; h++) {
+                    memcpy(dst + h * dstStride, src + h * srcStride, srcStride);
+                }
+                ```
 
     6. unlock绘制
        ```c
@@ -335,7 +395,7 @@ make install
     include $(BUILD_SHARED_LIBRARY)
     ```
 
-4. 将libyuv文件夹上传到Linux上，NDK的工程需要有jni的目录，并且有`Android.mk`的文件
+4. 将libyuv文件夹上传到Linux，NDK的工程需要有jni的目录，并且有`Android.mk`的文件
 
 5. 进行编译，需要在libyuv目录下，与jni同级的目录进行`ndk-build`
     ```
@@ -473,7 +533,7 @@ target_link_libraries( # Specifies the target library.
                        ${log-lib} )
 ```
 
-##### 注意
+### 注意
 
 * 播放偏慢问题
     
@@ -486,16 +546,17 @@ target_link_libraries( # Specifies the target library.
     int sleep = (int) (1000 * 1000 / frame_rate);
     ```
    
-* 调用`render`方法播放，部分资源会花屏，应该是libyuv使用的有问题，使用`play`方法播放没有问题
+* 调用`render()`播放，部分资源会花屏，应该是libyuv使用的有问题，使用`play()`播放没有问题
 
 * 没有解码音频，播放无声
 
 * 没有进行比例缩放，填充满屏幕
 
+### 参考
 
-参考：
 [Android+FFmpeg+ANativeWindow视频解码播放](https://blog.csdn.net/glouds/article/details/50937266)
 [FFmpeg - time_base,r_frame_rate](https://blog.csdn.net/biezhihua/article/details/62260498)
 [FFMPEG结构体分析：AVStream](https://blog.csdn.net/leixiaohua1020/article/details/14215821)
 [ffmpeg time_base](http://www.cnitblog.com/luofuchong/archive/2014/11/28/89869.html)
 [ffmpeg中的时间](https://www.cnblogs.com/yinxiangpei/articles/3892982.html)
+[最简单的基于FFmpeg的libswscale的示例（YUV转RGB）](https://blog.csdn.net/leixiaohua1020/article/details/42134965)
