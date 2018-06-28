@@ -24,6 +24,7 @@ add_library( # Sets the name of the library.
              SHARED
 
              # Provides a relative path to your source file(s).
+             src/main/jni/audio_player.c
              src/main/jni/ffmpeg_player.c )
 
 set(LIB_DIR ${CMAKE_SOURCE_DIR}/src/main/jniLibs)

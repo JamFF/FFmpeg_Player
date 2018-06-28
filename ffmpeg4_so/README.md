@@ -1,6 +1,8 @@
-# 像素格式转换与Native原生绘制
+# FFmpeg_Player
+
 1. 在NDK r17环境下，使用老脚本，编译FFmpeg4.0动态库
-2. 将MP4解码YUV，转为RGB并绘制到UI
+2. 将MP4解码YUV，转为RGB并绘制到UI，可以支持其他视频，例如mkv，avi，flv
+3. 播放MP3文件，可支持其他格式音频和视频
 
 ### Linux下FFmpeg编译脚本
 
@@ -120,17 +122,7 @@ make
 make install 
 ```
 
-### 思路整理
-1. SurfaceView创建完成时，打开文件，打开线程
-2. NDK中初始化，通过ANativeWindow绘制
-3. 得到ANativeWindow
-4. 设置RGB缓冲区
-5. ANativeWindow_lock
-6. 给缓冲区赋值，将YUV转为RGB
-7. ANativeWindow_unlock
-8. 释放ANativeWindow资源
-
-### 实现步骤
+### 视频播放
 
 ##### UI
 
@@ -533,7 +525,18 @@ target_link_libraries( # Specifies the target library.
                        ${log-lib} )
 ```
 
-### 注意
+##### 思路整理
+
+1. SurfaceView创建完成时，打开文件，打开线程
+2. NDK中初始化，通过ANativeWindow绘制
+3. 得到ANativeWindow
+4. 设置RGB缓冲区
+5. ANativeWindow_lock
+6. 给缓冲区赋值，将YUV转为RGB
+7. ANativeWindow_unlock
+8. 释放ANativeWindow资源
+
+##### 注意
 
 * 播放偏慢问题
     
@@ -546,13 +549,13 @@ target_link_libraries( # Specifies the target library.
     int sleep = (int) (1000 * 1000 / frame_rate);
     ```
    
-* 调用`render()`播放，部分资源会花屏，应该是libyuv使用的有问题，使用`play()`播放没有问题
+* 调用`render()`播放，部分资源会花屏，应该是使用libyuv转换RGB的有问题，使用`play()`播放没有问题
 
-* 没有解码音频，播放无声
+* 没有同步解码音频，播放无声
 
 * 没有进行比例缩放，填充满屏幕
 
-### 参考
+##### 参考
 
 [Android+FFmpeg+ANativeWindow视频解码播放](https://blog.csdn.net/glouds/article/details/50937266)
 [FFmpeg - time_base,r_frame_rate](https://blog.csdn.net/biezhihua/article/details/62260498)
@@ -560,3 +563,184 @@ target_link_libraries( # Specifies the target library.
 [ffmpeg time_base](http://www.cnitblog.com/luofuchong/archive/2014/11/28/89869.html)
 [ffmpeg中的时间](https://www.cnblogs.com/yinxiangpei/articles/3892982.html)
 [最简单的基于FFmpeg的libswscale的示例（YUV转RGB）](https://blog.csdn.net/leixiaohua1020/article/details/42134965)
+
+### 音频播放
+
+播放音频解码后的PCM格式
+
+* 使用C/C++播放——OpenSL ES
+* 使用Java播放——AudioTrack
+
+这里使用AudioTrack进行播放
+
+##### Native方法
+
+```java
+/**
+ * 播放媒体中的音频
+ *
+ * @param input  输入媒体路径
+ * @param output 输出音频PCM路径
+ */
+public native int playMusic(String input, String output);
+```
+
+##### 创建AudioTrack
+
+```java
+/**
+ * 创建AudioTrack，提供给C调用
+ *
+ * @param sampleRateInHz 采样率
+ * @param nb_channels    声道数
+ * @return {@link android.media.AudioTrack}
+ */
+private AudioTrack createAudioTrack(int sampleRateInHz, int nb_channels) {
+
+    // 固定的音频数据格式，16位PCM
+    int audioFormat = AudioFormat.ENCODING_PCM_16BIT;
+
+    // 声道布局
+    int channelConfig;
+    if (nb_channels == 1) {
+        channelConfig = android.media.AudioFormat.CHANNEL_OUT_MONO;
+    } else {
+        channelConfig = android.media.AudioFormat.CHANNEL_OUT_STEREO;
+    }
+
+    // AudioTrack所需的最小缓冲区大小
+    int bufferSizeInBytes = AudioTrack.getMinBufferSize(
+            sampleRateInHz,// 采样率
+            channelConfig,// 声道
+            audioFormat);// 音频数据的格式
+
+    mAudioTrack = new AudioTrack(
+            AudioManager.STREAM_MUSIC,// 音频流类型
+            sampleRateInHz,// 采样率
+            channelConfig,// 声道配置
+            audioFormat,// 音频数据的格式
+            bufferSizeInBytes,// 缓冲区大小
+            AudioTrack.MODE_STREAM);// 媒体流MODE_STREAM或静态缓冲MODE_STATIC
+
+    return mAudioTrack;
+}
+```
+
+##### JNI调用
+
+1. 调用`MyPlayer.createAudioTrack()`
+    ```c
+    // 获取MyPlayer的jclass
+    jclass player_class = (*env)->GetObjectClass(env, instance);
+
+    // 得到MyPlayer.createAudioTrack()
+    jmethodID create_audio_track_mid = (*env)->GetMethodID(env, player_class,// jclass
+                                                           "createAudioTrack",// 方法名
+                                                           "(II)Landroid/media/AudioTrack;");// 字段签名
+
+    // 调用MyPlayer.createAudioTrack()，创建AudioTrack实例
+    jobject audio_track = (*env)->CallObjectMethod(env, instance,// jobject
+                                                   create_audio_track_mid,// createAudioTrack()
+                                                   out_sample_rate,// createAudioTrack的参数
+                                                   out_channel_nb);// createAudioTrack的参数
+    ```
+
+2. 调用`AudioTrack.play()`
+
+    ```c
+    // 获取AudioTrack的jclass
+    jclass audio_track_class = (*env)->GetObjectClass(env, audio_track);
+
+    // 得到AudioTrack.play()
+    jmethodID audio_track_play_mid = (*env)->GetMethodID(env, audio_track_class, "play", "()V");
+
+    // 调用AudioTrack.play()
+    (*env)->CallVoidMethod(env, audio_track, audio_track_play_mid);
+    ```
+
+3. 调用`AudioTrack.write()`
+
+    1. `out_buffer`缓冲区数据，转成`byte`数组
+    
+        ```c
+        // 调用AudioTrack.write()时，需要创建jbyteArray
+        jbyteArray audio_sample_array = (*env)->NewByteArray(env,
+                                                             out_buffer_size);
+
+        // 拷贝数组需要对指针操作
+        jbyte *sample_bytep = (*env)->GetByteArrayElements(env,
+                                                           audio_sample_array,
+                                                           NULL);
+
+        // out_buffer的数据拷贝到sample_bytep
+        memcpy(sample_bytep,// 目标dest所指的内存地址
+               out_buffer,// 源src所指的内存地址的起始位置
+               (size_t) out_buffer_size);// 拷贝字节的数据的大小
+
+        // 同步到audio_sample_array，并释放sample_bytep，与GetByteArrayElements对应
+        // 如果不调用，audio_sample_array里面是空的，播放无声，并且会内存泄漏
+        (*env)->ReleaseByteArrayElements(env, audio_sample_array,
+                                         sample_bytep, 0);
+        ```
+    
+    2. 调用`AudioTrack.write()`
+
+        ```c
+        (*env)->CallIntMethod(env, audio_track, audio_track_write_mid,
+                              audio_sample_array,// 需要播放的数据数组
+                              0, out_buffer_size);
+        ```
+    
+    3. 释放局部资源
+    
+        ```c
+        (*env)->DeleteLocalRef(env, audio_sample_array);
+        ```
+
+        这里如果不进行释放，运行一段时间会崩溃，内存溢出
+        
+        `JNI ERROR (app bug): local reference table overflow (max=512)`
+        
+##### 如何得到字段签名
+
+1. 要找到`.class`文件目录
+
+    Android Studio的目录在`ffmpeg4_so\build\intermediates\classes`目录下
+
+2. 进入`ffmpeg4_so\build\intermediates\classes\debug`打开命令行
+
+3. 输入`javap -s -p 完整类名`就可得到字段签名
+
+    ```
+    javap -s -p com.jamff.ffmpeg.MyPlayer
+    Compiled from "MyPlayer.java"
+    public class com.jamff.ffmpeg.MyPlayer {
+      private android.media.AudioTrack mAudioTrack;
+        descriptor: Landroid/media/AudioTrack;
+      public com.jamff.ffmpeg.MyPlayer();
+        descriptor: ()V
+    
+      public native void render(java.lang.String, android.view.Surface);
+        descriptor: (Ljava/lang/String;Landroid/view/Surface;)V
+    
+      public native int play(java.lang.String, android.view.Surface);
+        descriptor: (Ljava/lang/String;Landroid/view/Surface;)I
+    
+      public native int playMusic(java.lang.String, java.lang.String);
+        descriptor: (Ljava/lang/String;Ljava/lang/String;)I
+    
+      private android.media.AudioTrack createAudioTrack(int, int);
+        descriptor: (II)Landroid/media/AudioTrack;
+    
+      public native void stop();
+        descriptor: ()V
+    
+      static {};
+        descriptor: ()V
+    }
+    ```
+
+##### 参考
+
+[memcpy函数详解](https://blog.csdn.net/xiaominkong123/article/details/51733528/)
+[JNI内存泄露处理方法汇总](https://blog.csdn.net/wangpingfang/article/details/53945479)

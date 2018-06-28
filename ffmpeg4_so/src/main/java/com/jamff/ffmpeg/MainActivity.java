@@ -22,7 +22,12 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
 
     private static final String TAG = "JamFF";
 
-    private static final String INPUT = "input.mp4";
+    private static final String VIDEO_INPUT = "input.mp4";
+
+    private static final String AUDIO_INPUT = "Love Story.mp3";
+    private static final String AUDIO_OUTPUT = "Love Story.pcm";
+
+    private File audioInputFile, audioOutputFile;
 
     private static final int REQUEST_EXTERNAL_STORAGE = 1;
     private static String[] PERMISSIONS_STORAGE = {
@@ -32,6 +37,7 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
     private VideoView video_view;
     private Button bt_start_1;
     private Button bt_start_2;
+    private Button bt_play_music;
     private Button bt_stop;
 
     private MyPlayer mPlayer;
@@ -51,19 +57,23 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         video_view = findViewById(R.id.video_view);
         bt_start_1 = findViewById(R.id.bt_start_1);
         bt_start_2 = findViewById(R.id.bt_start_2);
+        bt_play_music = findViewById(R.id.bt_play_music);
         bt_stop = findViewById(R.id.bt_stop);
     }
 
     private void initData() {
         checkPermission();
         mPlayer = new MyPlayer();
-        mFile = new File(Environment.getExternalStorageDirectory(), INPUT);
+        mFile = new File(Environment.getExternalStorageDirectory(), VIDEO_INPUT);
+
+        checkAudioFile();
     }
 
     private void initEvent() {
         video_view.getHolder().addCallback(this);
         bt_start_1.setOnClickListener(this);
         bt_start_2.setOnClickListener(this);
+        bt_play_music.setOnClickListener(this);
         bt_stop.setOnClickListener(this);
     }
 
@@ -106,6 +116,9 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
                     Toast.makeText(this, mFile.getAbsolutePath() + "文件不存在", Toast.LENGTH_SHORT).show();
                 }
                 break;
+            case R.id.bt_play_music:
+                playMusic();
+                break;
             case R.id.bt_stop:
                 mPlayer.stop();
                 bt_start_1.setEnabled(true);
@@ -114,6 +127,26 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         }
     }
 
+
+    /**
+     * 检查音频文件
+     */
+    private void checkAudioFile() {
+        audioInputFile = new File(Environment.getExternalStorageDirectory(), AUDIO_INPUT);
+        audioOutputFile = new File(Environment.getExternalStorageDirectory(), AUDIO_OUTPUT);
+
+        if (audioInputFile.exists()) {
+            bt_play_music.setEnabled(true);
+        } else {
+            bt_play_music.setEnabled(false);
+        }
+    }
+
+    /**
+     * 视频播放
+     *
+     * @param id 区分两种YUV420P->RGBA_8888的方式
+     */
     private void play(final int id) {
         if (mSurface == null) {
             Log.e(TAG, "start: mSurface == null");
@@ -131,6 +164,31 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
                 } else {
                     Log.e(TAG, "start: id error");
                 }
+            }
+        }).start();
+    }
+
+    /**
+     * 音频播放
+     */
+    private void playMusic() {
+        bt_play_music.setEnabled(false);
+        bt_play_music.setText("音频解码中");
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
+                final int result = mPlayer.playMusic(audioInputFile.getAbsolutePath(), audioOutputFile.getAbsolutePath());
+
+                runOnUiThread(new Runnable() {
+                    @Override
+                    public void run() {
+                        if (result == 0) {
+                            bt_play_music.setText("音频解码完成");
+                        } else {
+                            bt_play_music.setText("音频解码失败");
+                        }
+                    }
+                });
             }
         }).start();
     }

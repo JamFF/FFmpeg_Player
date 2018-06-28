@@ -2,5 +2,6 @@
     <string name="app_name">FFmpeg4.0_Player</string>
     <string name="start_1">start_1</string>
     <string name="start_2">start_2</string>
+    <string name="play_music">播放声音</string>
     <string name="stop">stop</string>
 </resources>
