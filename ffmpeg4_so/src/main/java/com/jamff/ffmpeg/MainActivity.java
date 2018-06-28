@@ -2,6 +2,9 @@ package com.jamff.ffmpeg;
 
 import android.Manifest;
 import android.content.pm.PackageManager;
+import android.graphics.Canvas;
+import android.graphics.Color;
+import android.media.AudioTrack;
 import android.os.Bundle;
 import android.os.Environment;
 import android.support.annotation.NonNull;
@@ -35,13 +38,13 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
             Manifest.permission.WRITE_EXTERNAL_STORAGE};
 
     private VideoView video_view;
-    private Button bt_start_1;
-    private Button bt_start_2;
+    private Button bt_play_video_1;
+    private Button bt_play_video_2;
     private Button bt_play_music;
     private Button bt_stop;
 
     private MyPlayer mPlayer;
-    private File mFile;
+    private File videoFile;
     private Surface mSurface;
 
     @Override
@@ -55,24 +58,23 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
 
     private void initView() {
         video_view = findViewById(R.id.video_view);
-        bt_start_1 = findViewById(R.id.bt_start_1);
-        bt_start_2 = findViewById(R.id.bt_start_2);
+        bt_play_video_1 = findViewById(R.id.bt_play_video_1);
+        bt_play_video_2 = findViewById(R.id.bt_play_video_2);
         bt_play_music = findViewById(R.id.bt_play_music);
         bt_stop = findViewById(R.id.bt_stop);
     }
 
     private void initData() {
         checkPermission();
-        mPlayer = new MyPlayer();
-        mFile = new File(Environment.getExternalStorageDirectory(), VIDEO_INPUT);
-
+        checkVideoFile();
         checkAudioFile();
+        mPlayer = new MyPlayer();
     }
 
     private void initEvent() {
         video_view.getHolder().addCallback(this);
-        bt_start_1.setOnClickListener(this);
-        bt_start_2.setOnClickListener(this);
+        bt_play_video_1.setOnClickListener(this);
+        bt_play_video_2.setOnClickListener(this);
         bt_play_music.setOnClickListener(this);
         bt_stop.setOnClickListener(this);
     }
@@ -96,50 +98,65 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
     @Override
     public void onClick(View v) {
         switch (v.getId()) {
-            case R.id.bt_start_1:
-                bt_start_1.setEnabled(false);
-                bt_start_2.setEnabled(false);
-                if (mFile.exists()) {
-                    bt_stop.setEnabled(true);
-                    play(v.getId());
-                } else {
-                    Toast.makeText(this, mFile.getAbsolutePath() + "文件不存在", Toast.LENGTH_SHORT).show();
+            case R.id.bt_play_video_1:
+            case R.id.bt_play_video_2:
+                if (!checkVideoFile()) {
+                    break;
                 }
-                break;
-            case R.id.bt_start_2:
-                bt_start_1.setEnabled(false);
-                bt_start_2.setEnabled(false);
-                if (mFile.exists()) {
-                    bt_stop.setEnabled(true);
-                    play(v.getId());
-                } else {
-                    Toast.makeText(this, mFile.getAbsolutePath() + "文件不存在", Toast.LENGTH_SHORT).show();
-                }
+                playVideo(v.getId());
                 break;
             case R.id.bt_play_music:
-                playMusic();
+                if (!checkAudioFile()) {
+                    break;
+                }
+                AudioTrack audioTrack = mPlayer.getAudioTrack();
+                if (audioTrack == null || audioTrack.getPlayState() == AudioTrack.PLAYSTATE_STOPPED) {
+                    playMusic();
+                } else {
+                    stopAll();
+                }
                 break;
             case R.id.bt_stop:
-                mPlayer.stop();
-                bt_start_1.setEnabled(true);
-                bt_start_2.setEnabled(true);
+                stopAll();
+                break;
+
+            default:
                 break;
         }
     }
 
+    /**
+     * 检查视频文件
+     */
+    private boolean checkVideoFile() {
+        videoFile = new File(Environment.getExternalStorageDirectory(), VIDEO_INPUT);
+
+        boolean exist = videoFile.exists();
+        bt_play_video_1.setEnabled(exist);
+        bt_play_video_2.setEnabled(exist);
+
+        if (!exist) {
+            Toast.makeText(this, videoFile.getAbsolutePath() + "文件不存在", Toast.LENGTH_SHORT).show();
+        }
+
+        return exist;
+    }
 
     /**
      * 检查音频文件
      */
-    private void checkAudioFile() {
+    private boolean checkAudioFile() {
         audioInputFile = new File(Environment.getExternalStorageDirectory(), AUDIO_INPUT);
         audioOutputFile = new File(Environment.getExternalStorageDirectory(), AUDIO_OUTPUT);
 
-        if (audioInputFile.exists()) {
-            bt_play_music.setEnabled(true);
-        } else {
-            bt_play_music.setEnabled(false);
+        boolean exist = audioInputFile.exists();
+        bt_play_music.setEnabled(exist);
+
+        if (!exist) {
+            Toast.makeText(this, audioInputFile.getAbsolutePath() + "文件不存在", Toast.LENGTH_SHORT).show();
         }
+
+        return exist;
     }
 
     /**
@@ -147,23 +164,33 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
      *
      * @param id 区分两种YUV420P->RGBA_8888的方式
      */
-    private void play(final int id) {
+    private void playVideo(final int id) {
+
+        bt_play_video_1.setEnabled(false);
+        bt_play_video_2.setEnabled(false);
+        bt_play_music.setEnabled(false);
+        bt_stop.setEnabled(true);
+
         if (mSurface == null) {
             Log.e(TAG, "start: mSurface == null");
             return;
         }
+
         new Thread(new Runnable() {
             @Override
             public void run() {
-                if (id == R.id.bt_start_1) {
+                int result;
+                if (id == R.id.bt_play_video_1) {
                     // Surface传递到Native函数中，用于绘制
-                    mPlayer.render(mFile.getAbsolutePath(), mSurface);
-                } else if (id == R.id.bt_start_2) {
+                    result = mPlayer.render(videoFile.getAbsolutePath(), mSurface);
+                } else if (id == R.id.bt_play_video_2) {
                     // 第二种方式，不使用libyuv
-                    mPlayer.play(mFile.getAbsolutePath(), mSurface);
+                    result = mPlayer.play(videoFile.getAbsolutePath(), mSurface);
                 } else {
+                    result = -1;
                     Log.e(TAG, "start: id error");
                 }
+                complete(result);
             }
         }).start();
     }
@@ -172,25 +199,66 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
      * 音频播放
      */
     private void playMusic() {
+
+        bt_play_video_1.setEnabled(false);
+        bt_play_video_2.setEnabled(false);
         bt_play_music.setEnabled(false);
-        bt_play_music.setText("音频解码中");
+        bt_stop.setEnabled(true);
+
         new Thread(new Runnable() {
             @Override
             public void run() {
-                final int result = mPlayer.playMusic(audioInputFile.getAbsolutePath(), audioOutputFile.getAbsolutePath());
-
-                runOnUiThread(new Runnable() {
-                    @Override
-                    public void run() {
-                        if (result == 0) {
-                            bt_play_music.setText("音频解码完成");
-                        } else {
-                            bt_play_music.setText("音频解码失败");
-                        }
-                    }
-                });
+                int result = mPlayer.playMusic(audioInputFile.getAbsolutePath(), audioOutputFile.getAbsolutePath());
+                complete(result);
             }
         }).start();
+    }
+
+    /**
+     * 停止播放
+     */
+    private void stopAll() {
+        mPlayer.stop();
+        mPlayer.stopMusic();
+    }
+
+    /**
+     * 视频播放结束后，SurfaceView清空画布
+     */
+    public void clearDraw() {
+        Canvas canvas = null;
+        try {
+            canvas = video_view.getHolder().lockCanvas(null);
+            canvas.drawColor(Color.BLACK);
+        } catch (Exception e) {
+            // TODO: handle exception
+        } finally {
+            if (canvas != null) {
+                video_view.getHolder().unlockCanvasAndPost(canvas);
+            }
+        }
+    }
+
+    /**
+     * 播放完成，或者手动停止
+     *
+     * @param result 0成功，-1失败
+     */
+    private void complete(final int result) {
+        runOnUiThread(new Runnable() {
+            @Override
+            public void run() {
+                bt_play_video_1.setEnabled(true);
+                bt_play_video_2.setEnabled(true);
+                bt_play_music.setEnabled(true);
+                clearDraw();
+                if (result == 0) {
+                    Toast.makeText(MainActivity.this, "播放完成", Toast.LENGTH_SHORT).show();
+                } else {
+                    Toast.makeText(MainActivity.this, "播放失败", Toast.LENGTH_SHORT).show();
+                }
+            }
+        });
     }
 
     /**
@@ -202,8 +270,9 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
             ActivityCompat.requestPermissions(this, PERMISSIONS_STORAGE, REQUEST_EXTERNAL_STORAGE);
             Log.d(TAG, "checkPermission: 尚未授权");
         } else {
-            bt_start_1.setEnabled(true);
-            bt_start_2.setEnabled(true);
+            bt_play_video_1.setEnabled(true);
+            bt_play_video_2.setEnabled(true);
+            bt_play_music.setEnabled(true);
             Log.d(TAG, "checkPermission: 已经授权");
         }
     }
@@ -213,8 +282,9 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
         if (requestCode == REQUEST_EXTERNAL_STORAGE) {
             if (grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-                bt_start_1.setEnabled(true);
-                bt_start_2.setEnabled(true);
+                bt_play_video_1.setEnabled(true);
+                bt_play_video_2.setEnabled(true);
+                bt_play_music.setEnabled(true);
                 Log.d(TAG, "onRequestPermissionsResult: 接受权限");
             } else {
                 Toast.makeText(this, "未开通文件读写权限", Toast.LENGTH_SHORT).show();
@@ -229,7 +299,7 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
 
     @Override
     public void onBackPressed() {
-        mPlayer.stop();
+        stopAll();
         super.onBackPressed();
     }
 }

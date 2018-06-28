@@ -15,6 +15,9 @@
 
 #define MAX_AUDIO_FRAME_SIZE 44100 * 2
 
+// 停止的标记位
+int flag;
+
 JNIEXPORT jint JNICALL
 Java_com_jamff_ffmpeg_MyPlayer_playMusic(JNIEnv *env, jobject instance, jstring input_jstr,
                                          jstring output_jstr) {
@@ -180,8 +183,15 @@ Java_com_jamff_ffmpeg_MyPlayer_playMusic(JNIEnv *env, jobject instance, jstring 
     (*env)->CallVoidMethod(env, audio_track, audio_track_play_mid);
 
     // 得到AudioTrack.write()
-    jmethodID audio_track_write_mid = (*env)->GetMethodID(env, audio_track_class, "write",
-                                                          "([BII)I");
+    jmethodID audio_track_write_mid = (*env)->GetMethodID(env, audio_track_class,
+                                                          "write", "([BII)I");
+
+    // 得到AudioTrack.stop()
+    jmethodID audio_track_stop_mid = (*env)->GetMethodID(env, audio_track_class, "stop", "()V");
+
+    // 得到AudioTrack.release()
+    jmethodID audio_track_release_mid = (*env)->GetMethodID(env, audio_track_class,
+                                                            "release", "()V");
 
     // JNI-----------------------end
 
@@ -192,8 +202,10 @@ Java_com_jamff_ffmpeg_MyPlayer_playMusic(JNIEnv *env, jobject instance, jstring 
 
     int frame_count = 0;
 
+    flag = 1;
+
     // 7.一帧一帧的读取压缩音频数据AVPacket
-    while (av_read_frame(pFormatCtx, packet) >= 0) {
+    while (av_read_frame(pFormatCtx, packet) >= 0 && flag) {
         // 只要音频压缩数据（根据流的索引位置判断）
         if (packet->stream_index == audio_stream_idx) {
             // 8.解码一帧音频压缩数据，得到音频PCM数据，AVPacket->AVFrame
@@ -275,6 +287,15 @@ Java_com_jamff_ffmpeg_MyPlayer_playMusic(JNIEnv *env, jobject instance, jstring 
         av_packet_unref(packet);
     }
 
+    // 四、调用AudioTrack.stop()
+    (*env)->CallVoidMethod(env, audio_track, audio_track_stop_mid);
+
+    // 五、调用AudioTrack.release()
+    (*env)->CallVoidMethod(env, audio_track, audio_track_release_mid);
+
+    // 关闭文件
+    fclose(fp_pcm);
+
     // 释放AVFrame
     av_frame_free(&pFrame);
 
@@ -294,4 +315,9 @@ Java_com_jamff_ffmpeg_MyPlayer_playMusic(JNIEnv *env, jobject instance, jstring 
     (*env)->ReleaseStringUTFChars(env, output_jstr, output_cstr);
 
     return 0;
+}
+
+JNIEXPORT void JNICALL
+Java_com_jamff_ffmpeg_MyPlayer_stopMusic(JNIEnv *env, jobject instance) {
+    flag = 0;
 }

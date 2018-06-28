@@ -17,25 +17,25 @@
         android:orientation="horizontal">
 
         <Button
-            android:id="@+id/bt_start_1"
+            android:id="@+id/bt_play_video_1"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:enabled="false"
-            android:text="@string/start_1"/>
+            android:text="@string/play_video_1"/>
 
         <Button
-            android:id="@+id/bt_start_2"
+            android:id="@+id/bt_play_video_2"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:enabled="false"
-            android:text="@string/start_2"/>
+            android:text="@string/play_video_2"/>
 
         <Button
             android:id="@+id/bt_play_music"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:enabled="false"
-            android:text="音频播放"/>
+            android:text="@string/play_music"/>
 
         <Button
             android:id="@+id/bt_stop"

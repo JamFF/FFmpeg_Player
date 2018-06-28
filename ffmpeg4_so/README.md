@@ -179,18 +179,18 @@ make install
             android:orientation="horizontal">
 
             <Button
-                android:id="@+id/bt_start_1"
+                android:id="@+id/bt_play_video_1"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:enabled="false"
-                android:text="@string/start_1"/>
+                android:text="@string/play_video_1"/>
 
             <Button
-                android:id="@+id/bt_start_2"
+                android:id="@+id/bt_play_video_2"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:enabled="false"
-                android:text="@string/start_2"/>
+                android:text="@string/play_video_2"/>
 
             <Button
                 android:id="@+id/bt_stop"
@@ -209,23 +209,38 @@ make install
 1. 将文件路径以及Surface传入
 
     ```java
-    private void play(final int id) {
+    /**
+     * 视频播放
+     *
+     * @param id 区分两种YUV420P->RGBA_8888的方式
+     */
+    private void playVideo(final int id) {
+
+        bt_play_video_1.setEnabled(false);
+        bt_play_video_2.setEnabled(false);
+        bt_play_music.setEnabled(false);
+        bt_stop.setEnabled(true);
+
         if (mSurface == null) {
             Log.e(TAG, "start: mSurface == null");
             return;
         }
+
         new Thread(new Runnable() {
             @Override
             public void run() {
-                if (id == R.id.bt_start_1) {
+                int result;
+                if (id == R.id.bt_play_video_1) {
                     // Surface传递到Native函数中，用于绘制
-                    mPlayer.render(mFile.getAbsolutePath(), mSurface);
-                } else if (id == R.id.bt_start_2) {
+                    result = mPlayer.render(videoFile.getAbsolutePath(), mSurface);
+                } else if (id == R.id.bt_play_video_2) {
                     // 第二种方式，不使用libyuv
-                    mPlayer.play(mFile.getAbsolutePath(), mSurface);
+                    result = mPlayer.play(videoFile.getAbsolutePath(), mSurface);
                 } else {
+                    result = -1;
                     Log.e(TAG, "start: id error");
                 }
+                complete(result);
             }
         }).start();
     }
@@ -242,8 +257,9 @@ make install
          *
          * @param input   输入视频路径
          * @param surface {@link android.view.Surface}
+         * @return 0成功，-1失败
          */
-        public native void render(String input, Surface surface);
+        public native int render(String input, Surface surface);
     
         /**
          * 使用ffmpeg自带的swscale.h中的sws_scale将解码数据转换为RGB，进行播放
@@ -251,6 +267,7 @@ make install
          *
          * @param input   输入视频路径
          * @param surface {@link android.view.Surface}
+         * @return 0成功，-1失败
          */
         public native int play(String input, Surface surface);
     
@@ -555,6 +572,8 @@ target_link_libraries( # Specifies the target library.
 
 * 没有进行比例缩放，填充满屏幕
 
+* 播放停止后，停留在最后一帧，需要手动清除SurfaceView画布，才可保证视频停止后，界面恢复初始状态
+
 ##### 参考
 
 [Android+FFmpeg+ANativeWindow视频解码播放](https://blog.csdn.net/glouds/article/details/50937266)
@@ -563,6 +582,7 @@ target_link_libraries( # Specifies the target library.
 [ffmpeg time_base](http://www.cnitblog.com/luofuchong/archive/2014/11/28/89869.html)
 [ffmpeg中的时间](https://www.cnblogs.com/yinxiangpei/articles/3892982.html)
 [最简单的基于FFmpeg的libswscale的示例（YUV转RGB）](https://blog.csdn.net/leixiaohua1020/article/details/42134965)
+[SurfaceView清空画布的解决方案](https://blog.csdn.net/zhangfengwu2014/article/details/78126241)
 
 ### 音频播放
 
@@ -658,7 +678,22 @@ private AudioTrack createAudioTrack(int sampleRateInHz, int nb_channels) {
     (*env)->CallVoidMethod(env, audio_track, audio_track_play_mid);
     ```
 
-3. 调用`AudioTrack.write()`
+3. 其他`AudioTrack`方法
+
+    ```c
+    // 得到AudioTrack.write()
+    jmethodID audio_track_write_mid = (*env)->GetMethodID(env, audio_track_class,
+                                                          "write", "([BII)I");
+    
+    // 得到AudioTrack.stop()
+    jmethodID audio_track_stop_mid = (*env)->GetMethodID(env, audio_track_class, "stop", "()V");
+    
+    // 得到AudioTrack.release()
+    jmethodID audio_track_release_mid = (*env)->GetMethodID(env, audio_track_class,
+                                                            "release", "()V");
+    ```
+
+4. 调用`AudioTrack.write()`
 
     1. `out_buffer`缓冲区数据，转成`byte`数组
     
@@ -700,7 +735,17 @@ private AudioTrack createAudioTrack(int sampleRateInHz, int nb_channels) {
         这里如果不进行释放，运行一段时间会崩溃，内存溢出
         
         `JNI ERROR (app bug): local reference table overflow (max=512)`
-        
+
+4. 播放结束时调用`AudioTrack.stop()`和`AudioTrack.release()`
+
+```c
+// 调用AudioTrack.stop()
+(*env)->CallVoidMethod(env, audio_track, audio_track_stop_mid);
+
+// 调用AudioTrack.release()
+(*env)->CallVoidMethod(env, audio_track, audio_track_release_mid);
+```
+
 ##### 如何得到字段签名
 
 1. 要找到`.class`文件目录
@@ -742,5 +787,6 @@ private AudioTrack createAudioTrack(int sampleRateInHz, int nb_channels) {
 
 ##### 参考
 
+[AudioTrack](https://developer.android.google.cn/reference/android/media/AudioTrack)
 [memcpy函数详解](https://blog.csdn.net/xiaominkong123/article/details/51733528/)
 [JNI内存泄露处理方法汇总](https://blog.csdn.net/wangpingfang/article/details/53945479)

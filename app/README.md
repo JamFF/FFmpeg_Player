@@ -1,8 +1,8 @@
-# FFmpeg_Player
+# FFmpeg解码音视频
 
 1. 在NDK r10e环境下，使用老脚本，编译FFmpeg2.6.9动态库
-2. 将MP3解码PCM
-3. 将MP4解码YUV
+2. 将MP3解码PCM，可支持其他格式音频和视频
+3. 将MP4解码YUV，可以支持其他视频，例如mkv，avi，flv
 
 ### Linux下FFmpeg编译脚本
 
@@ -222,20 +222,23 @@ public native static int decodeAudio(String input, String output);
     
         // 需要一帧一帧的读取压缩音频数据AVPacket
         while (av_read_frame(pFormatCtx, packet) >= 0) {
-            // 解码一帧音频压缩数据，得到音频PCM数据，AVPacket->AVFrame
-            ret = avcodec_decode_audio4(pCodecCtx, pFrame, &got_frame, packet);
-            if (ret < 0) {
-                LOG_E("解码错误 %d", ret);
-                // FIXME 第一帧会返回-1094995529，AVERROR_INVALIDDATA
-                // return -1;
+            // 只要音频压缩数据（根据流的索引位置判断）
+            if (packet->stream_index == audio_stream_idx) {
+                // 解码一帧音频压缩数据，得到音频PCM数据，AVPacket->AVFrame
+                ret = avcodec_decode_audio4(pCodecCtx, pFrame, &got_frame, packet);
+                if (ret < 0) {
+                    LOG_E("解码错误 %d", ret);
+                    // FIXME 第一帧会返回-1094995529，AVERROR_INVALIDDATA
+                    // return -1;
+                }
+        
+                // 为0说明没有帧可以解压缩，非0正在解码
+                if (got_frame) {
+        
+                }
+                // 释放资源
+                av_free_packet(packet);
             }
-    
-            // 为0说明没有帧可以解压缩，非0正在解码
-            if (got_frame) {
-    
-            }
-            // 释放资源
-            av_free_packet(packet);
         }
         ```
 
@@ -697,7 +700,7 @@ public native static int decodeVideo(String input, String output);
     
 ### 注意
 
-解码音频中，第一帧会返回错误码，目前没有找到解决方案
+##### 解码音频中，第一帧会返回错误码
 
 ```c
 // 解码一帧音频压缩数据，得到音频PCM数据，AVPacket->AVFrame
@@ -706,6 +709,58 @@ if (ret < 0) {
     LOG_E("解码错误 %d", ret);
     // FIXME 第一帧会返回-1094995529，AVERROR_INVALIDDATA
     // return -1;
+}
+```
+
+##### 解决方式
+
+更新FFmpeg4.0后，`avcodec_decode_audio4`过时
+
+使用`avcodec_send_packet()`和`avcodec_receive_frame()`代替
+
+```c
+// 解码一帧音频压缩数据，得到音频PCM数据，AVPacket->AVFrame
+ret = avcodec_send_packet(pCodecCtx, packet);
+if (ret < 0) {
+    LOG_E("发送数据包到解码器时出错 %d", ret);
+    return -1;
+}
+while (ret >= 0) {
+    ret = avcodec_receive_frame(pCodecCtx, pFrame);
+    switch (ret) {
+
+        case AVERROR(EAGAIN):// 输出是不可用的，必须发送新的输入
+            break;
+        case AVERROR_EOF:// 已经完全刷新，不会再有输出帧了
+            break;
+        case AVERROR(EINVAL):// codec打不开，或者是一个encoder
+            break;
+        case 0:// 成功，返回一个输出帧
+
+            LOG_I("解码：%d", ++frame_count);
+            // 9.转换音频
+            ret = swr_convert(swrCtx,// 重采样上下文
+                              &out_buffer,// 输出缓冲区
+                              MAX_AUDIO_FRAME_SIZE,// 每通道采样的可用空间量
+                              (const uint8_t **) pFrame->data,// 输入缓冲区
+                              pFrame->nb_samples);// 一个通道中可用的输入采样数量
+            if (ret < 0) {
+                LOG_E("转换时出错 %d", ret);
+            } else {
+                // 获取给定音频参数所需的缓冲区大小
+                int out_buffer_size = av_samples_get_buffer_size(NULL,
+                                                                 out_channel_nb,// 输出的声道个数
+                                                                 pFrame->nb_samples,// 一个通道中音频采样数量
+                                                                 out_sample_fmt,// 输出采样格式16bit
+                                                                 1);// 缓冲区大小对齐（0 = 默认值，1 = 不对齐）
+                // 10.输出PCM文件
+                fwrite(out_buffer, 1, (size_t) out_buffer_size, fp_pcm);
+            }
+            break;
+        default:// 合法的解码错误
+            LOG_E("从解码器接收帧时出错 %d", ret);
+            break;
+    }
 }
 ```
 

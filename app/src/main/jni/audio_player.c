@@ -160,33 +160,36 @@ Java_com_jamff_ffmpeg_DecodeUtils_decodeAudio(JNIEnv *env, jclass type, jstring 
 
     // 7.一帧一帧的读取压缩音频数据AVPacket
     while (av_read_frame(pFormatCtx, packet) >= 0) {
-        // 8.解码一帧音频压缩数据，得到音频PCM数据，AVPacket->AVFrame
-        ret = avcodec_decode_audio4(pCodecCtx, pFrame, &got_frame, packet);
-        if (ret < 0) {
-            LOG_E("解码错误 %d", ret);
-            // FIXME 第一帧会返回-1094995529，AVERROR_INVALIDDATA
-            // return -1;
-        }
-
-        // 为0说明没有帧可以解压缩，非0正在解码
-        if (got_frame > 0) {
-            LOG_I("解码：%d", ++frame_count);
-            // 9.转换音频
-            ret = swr_convert(swrCtx,// 重采样上下文
-                              &out_buffer,// 输出缓冲区
-                              MAX_AUDIO_FRAME_SIZE,// 每通道采样的可用空间量
-                              (const uint8_t **) pFrame->data,// 输入缓冲区
-                              pFrame->nb_samples);// 一个通道中可用的输入采样数量
+        // 只要视频压缩数据（根据流的索引位置判断）
+        if (packet->stream_index == audio_stream_idx) {
+            // 8.解码一帧音频压缩数据，得到音频PCM数据，AVPacket->AVFrame
+            ret = avcodec_decode_audio4(pCodecCtx, pFrame, &got_frame, packet);
             if (ret < 0) {
-                LOG_E("转换时出错");
-            } else {
-                // 获取给定音频参数所需的缓冲区大小
-                int out_buffer_size = av_samples_get_buffer_size(NULL, out_channel_nb,// 输出的声道个数
-                                                                 pFrame->nb_samples,// 一个通道中音频采样数量
-                                                                 out_sample_fmt,// 输出采样格式16bit
-                                                                 1);// 缓冲区大小对齐（0 = 默认值，1 = 不对齐）
-                // 10.输出PCM文件
-                fwrite(out_buffer, 1, (size_t) out_buffer_size, fp_pcm);
+                LOG_E("解码错误 %d", ret);
+                // FIXME 第一帧会返回-1094995529，AVERROR_INVALIDDATA
+                // return -1;
+            }
+
+            // 为0说明没有帧可以解压缩，非0正在解码
+            if (got_frame > 0) {
+                LOG_I("解码：%d", ++frame_count);
+                // 9.转换音频
+                ret = swr_convert(swrCtx,// 重采样上下文
+                                  &out_buffer,// 输出缓冲区
+                                  MAX_AUDIO_FRAME_SIZE,// 每通道采样的可用空间量
+                                  (const uint8_t **) pFrame->data,// 输入缓冲区
+                                  pFrame->nb_samples);// 一个通道中可用的输入采样数量
+                if (ret < 0) {
+                    LOG_E("转换时出错");
+                } else {
+                    // 获取给定音频参数所需的缓冲区大小
+                    int out_buffer_size = av_samples_get_buffer_size(NULL, out_channel_nb,// 输出的声道个数
+                                                                     pFrame->nb_samples,// 一个通道中音频采样数量
+                                                                     out_sample_fmt,// 输出采样格式16bit
+                                                                     1);// 缓冲区大小对齐（0 = 默认值，1 = 不对齐）
+                    // 10.输出PCM文件
+                    fwrite(out_buffer, 1, (size_t) out_buffer_size, fp_pcm);
+                }
             }
         }
         // 释放资源

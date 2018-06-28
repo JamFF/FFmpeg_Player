@@ -23,10 +23,10 @@
 #define LOG_I(FORMAT, ...) __android_log_print(ANDROID_LOG_INFO,"JamFF",FORMAT,##__VA_ARGS__);
 #define LOG_E(FORMAT, ...) __android_log_print(ANDROID_LOG_ERROR,"JamFF",FORMAT,##__VA_ARGS__);
 
-// 暂停的标记位
+// 停止的标记位
 int flag;
 
-JNIEXPORT void JNICALL
+JNIEXPORT int JNICALL
 Java_com_jamff_ffmpeg_MyPlayer_render(JNIEnv *env, jobject instance, jstring input_jstr,
                                       jobject surface) {
     LOG_I("render");
@@ -43,13 +43,13 @@ Java_com_jamff_ffmpeg_MyPlayer_render(JNIEnv *env, jobject instance, jstring inp
     int av_error = avformat_open_input(&pFormatCtx, input_cstr, NULL, NULL);
     if (av_error != 0) {
         LOG_E("error:%d, %s,", av_error, "无法打开输入视频文件");
-        return;
+        return -1;
     }
 
     // 3.获取视频文件信息
     if (avformat_find_stream_info(pFormatCtx, NULL) < 0) {
         LOG_E("无法获取视频文件信息");
-        return;
+        return -1;
     }
 
     // 视频解码，需要找到视频对应的AVStream所在pFormatCtx->streams的索引位置
@@ -67,7 +67,7 @@ Java_com_jamff_ffmpeg_MyPlayer_render(JNIEnv *env, jobject instance, jstring inp
 
     if (video_stream_idx == -1) {
         LOG_E("找不到视频流");
-        return;
+        return -1;
     }
 
     // 视频对应的AVStream
@@ -87,13 +87,13 @@ Java_com_jamff_ffmpeg_MyPlayer_render(JNIEnv *env, jobject instance, jstring inp
     if (pCodec == NULL) {
         // 迅雷看看，找不到解码器，临时下载一个解码器
         LOG_E("找不到解码器");
-        return;
+        return -1;
     }
 
     // 6.打开解码器
     if (avcodec_open2(pCodecCtx, pCodec, NULL) < 0) {
         LOG_E("解码器无法打开");
-        return;
+        return -1;
     }
 
     // 获取视频宽高
@@ -127,7 +127,6 @@ Java_com_jamff_ffmpeg_MyPlayer_render(JNIEnv *env, jobject instance, jstring inp
     // 绘制时的缓冲区
     ANativeWindow_Buffer outBuffer;
 
-    flag = 0;
     /************************************* native绘制 end ***************************************/
 
     int got_picture, ret;
@@ -137,15 +136,17 @@ Java_com_jamff_ffmpeg_MyPlayer_render(JNIEnv *env, jobject instance, jstring inp
     // 间隔是微秒
     int sleep = (int) (1000 * 1000 / frame_rate);
 
+    flag = 1;
+
     // 7.一帧一帧的读取压缩视频数据AVPacket
-    while (av_read_frame(pFormatCtx, packet) >= 0 && flag == 0) {
+    while (av_read_frame(pFormatCtx, packet) >= 0 && flag) {
         // 只要视频压缩数据（根据流的索引位置判断）
         if (packet->stream_index == video_stream_idx) {
             // 8.解码一帧视频压缩数据，得到视频像素数据，AVPacket->AVFrame
             ret = avcodec_decode_video2(pCodecCtx, pFrame, &got_picture, packet);
             if (ret < 0) {
                 LOG_E("解码错误");
-                return;
+                return -1;
             }
 
             // 为0说明解码完成，非0正在解码
@@ -197,6 +198,8 @@ Java_com_jamff_ffmpeg_MyPlayer_render(JNIEnv *env, jobject instance, jstring inp
     avformat_free_context(pFormatCtx);
 
     (*env)->ReleaseStringUTFChars(env, input_jstr, input_cstr);
+
+    return 0;
 }
 
 JNIEXPORT jint JNICALL
@@ -304,7 +307,6 @@ Java_com_jamff_ffmpeg_MyPlayer_play(JNIEnv *env, jobject instance, jstring input
     // 绘制时的缓冲区
     ANativeWindow_Buffer windowBuffer;
 
-    flag = 0;
     /************************************* native绘制 end ***************************************/
 
     // av_image_get_buffer_size代替过时的avpicture_get_size
@@ -330,8 +332,10 @@ Java_com_jamff_ffmpeg_MyPlayer_play(JNIEnv *env, jobject instance, jstring input
     // 间隔是微秒
     int sleep = (int) (1000 * 1000 / frame_rate);
 
+    flag = 1;
+
     // 7.一帧一帧的读取压缩视频数据AVPacket
-    while (av_read_frame(pFormatCtx, &packet) >= 0 && flag == 0) {
+    while (av_read_frame(pFormatCtx, &packet) >= 0 && flag) {
         // 只要视频压缩数据（根据流的索引位置判断）
         if (packet.stream_index == video_stream_idx) {
             // 8.解码一帧视频压缩数据，得到视频像素数据，AVPacket->AVFrame
@@ -405,8 +409,7 @@ Java_com_jamff_ffmpeg_MyPlayer_play(JNIEnv *env, jobject instance, jstring input
     return 0;
 }
 
-
 JNIEXPORT void JNICALL
 Java_com_jamff_ffmpeg_MyPlayer_stop(JNIEnv *env, jobject instance) {
-    flag = -1;
+    flag = 0;
 }

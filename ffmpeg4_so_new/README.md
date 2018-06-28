@@ -1,9 +1,13 @@
-# FFmpeg_Player
-在NDK r17b环境下，使用新脚本，编译FFmpeg4.0.1动态库，使用FFmpeg最新API将MP4解码YUV
+# FFmpeg最新API
+
+1. 在NDK r17b环境下，使用新脚本，编译FFmpeg4.0.1动态库
+2. 使用FFmpeg最新API解码视频
+
+### Linux下FFmpeg编译脚本
 
 ##### 编译armeabi-v7a的脚本
 
-```
+```bash
 #!/bin/bash
 #shell脚本第一行必须是指定shell脚本解释器，这里使用的是bash解释器
 
@@ -53,7 +57,7 @@ make install
 
 ##### 编译arm64-v8a的脚本
 
-```
+```bash
 #!/bin/bash
 #shell脚本第一行必须是指定shell脚本解释器，这里使用的是bash解释器
 
@@ -103,8 +107,108 @@ make install
 
 对比ffmpeg4_so的脚本，编译结果少了libpostproc模块，添加--enable-gpl编译即可
 
-参考
+### 使用FFmpeg最新API
+
+##### ~~av_register_all()~~
+
+废弃，不需要在入口调用`av_register_all()`进行注册所有组件。
+
+##### ~~pFormatCtx->streams[i]->codec~~->codec_type
+
+废弃，推荐使用`pFormatCtx->streams[i]->codecpar->codec_type`
+
+##### 获取AVCodecContext的方式
+
+* 老方式
+    
+    ```c
+    // 视频对应的AVStream
+    AVStream *stream = pFormatCtx->streams[video_stream_idx];
+    
+    // 视频帧率，每秒多少帧
+    double frame_rate = av_q2d(stream->avg_frame_rate);
+    LOG_I("帧率 = %f", frame_rate);
+    
+    // 只有知道视频的编码方式，才能够根据编码方式去找到解码器
+    // 4.获取视频流中的编解码器上下文
+    AVCodecContext *pCodecCtx = stream->codec;
+    
+    // 5.根据编解码上下文中的编码id查找对应的视频解码器
+    AVCodec *pCodec = avcodec_find_decoder(pCodecCtx->codec_id);
+    // 例如加密或者没有该编码的解码器
+    if (pCodec == NULL) {
+        // 迅雷看看，找不到解码器，临时下载一个解码器
+        LOG_E("找不到解码器");
+        return -1;
+    }
+    ```
+
+* 新方式
+
+    ```c
+    // 视频对应的AVStream
+    AVStream *stream = pFormatCtx->streams[video_stream_idx];
+
+    // 视频帧率，每秒多少帧
+    double frame_rate = av_q2d(stream->avg_frame_rate);
+    LOG_I("帧率 = %f", frame_rate);
+
+    // 4.只有知道视频的编码方式，才能够根据编码方式去找到解码器
+    // 事实上AVCodecParameters包含了大部分解码器相关的信息
+    AVCodecParameters *pCodecParam = stream->codecpar;
+    // 根据AVCodecParameters中的编码id查找对应的视频解码器
+    AVCodec *pCodec = avcodec_find_decoder(pCodecParam->codec_id);
+    // 例如加密或者没有该编码的解码器
+    if (pCodec == NULL) {
+        // 迅雷看看，找不到解码器，临时下载一个解码器
+        LOG_E("找不到解码器");
+        return;
+    }
+
+    // 初始化编解码上下文
+    AVCodecContext *pCodecCtx = avcodec_alloc_context3(pCodec);// 需要使用avcodec_free_context释放
+    // 这里是直接从AVCodecParameters复制到AVCodecContext
+    avcodec_parameters_to_context(pCodecCtx, pCodecParam);
+    ```
+
+##### ~~avcodec_decode_video2()~~
+
+废弃，推荐使用`avcodec_send_packet()`和`avcodec_receive_frame()`
+
+```c
+ret = avcodec_send_packet(pCodecCtx, packet);
+if (ret < 0) {
+    LOG_E("Error while sending a packet to the decoder");
+    break;
+}
+while (ret >= 0) {
+    ret = avcodec_receive_frame(pCodecCtx, pFrame);
+    switch (ret) {
+
+        case AVERROR(EAGAIN):// 输出是不可用的，必须发送新的输入
+            break;
+        case AVERROR_EOF:// 已经完全刷新，不会再有输出帧了
+            break;
+        case AVERROR(EINVAL):// codec打不开，或者是一个encoder
+            break;
+        case 0:// 成功，返回一个输出帧
+            // TODO
+            break;
+        default:// 合法的解码错误
+            LOG_E("Error while receiving a frame from the decoder");
+            break;
+    }
+}
+```
+
+##### ~~av_free_packet()~~
+
+废弃，推荐使用`av_packet_unref()`
+
+### 参考
+
 [FFmpeg Documentation](http://ffmpeg.org/doxygen/trunk/index.html)
+[av_register_all is deprecated](https://github.com/intel/libyami-utils/pull/118)
 [FFmpeg新旧接口对照使用笔记](https://blog.csdn.net/zhangwu1241/article/details/53183590)
 [ffmpeg 新老接口问题及对照集锦](https://blog.csdn.net/sukhoi27smk/article/details/18842725)
 [用AVCodecParameters代替AVCodecContext](https://blog.csdn.net/luotuo44/article/details/54981809)

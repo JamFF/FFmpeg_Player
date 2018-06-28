@@ -12,6 +12,10 @@ import android.view.Surface;
  */
 public class MyPlayer {
 
+    public AudioTrack getAudioTrack() {
+        return mAudioTrack;
+    }
+
     private AudioTrack mAudioTrack;
 
     /**
@@ -20,8 +24,9 @@ public class MyPlayer {
      *
      * @param input   输入视频路径
      * @param surface {@link android.view.Surface}
+     * @return 0成功，-1失败
      */
-    public native void render(String input, Surface surface);
+    public native int render(String input, Surface surface);
 
     /**
      * 使用ffmpeg自带的swscale.h中的sws_scale将解码数据转换为RGB，进行播放
@@ -29,6 +34,7 @@ public class MyPlayer {
      *
      * @param input   输入视频路径
      * @param surface {@link android.view.Surface}
+     * @return 0成功，-1失败
      */
     public native int play(String input, Surface surface);
 
@@ -81,6 +87,11 @@ public class MyPlayer {
      * 停止播放
      */
     public native void stop();
+
+    /**
+     * 停止音频播放
+     */
+    public native void stopMusic();
 
     static {
         System.loadLibrary("player");
