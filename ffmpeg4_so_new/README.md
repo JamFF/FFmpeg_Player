@@ -3,9 +3,9 @@
 1. 在NDK r17b环境下，使用新脚本，编译FFmpeg4.0.1动态库
 2. 使用FFmpeg最新API解码视频
 
-### Linux下FFmpeg编译脚本
+## Linux下FFmpeg编译脚本
 
-##### 编译armeabi-v7a的脚本
+### 编译armeabi-v7a的脚本
 
 ```bash
 #!/bin/bash
@@ -55,7 +55,7 @@ make clean
 make install
 ```
 
-##### 编译arm64-v8a的脚本
+### 编译arm64-v8a的脚本
 
 ```bash
 #!/bin/bash
@@ -107,17 +107,17 @@ make install
 
 对比ffmpeg4_so的脚本，编译结果少了libpostproc模块，添加--enable-gpl编译即可
 
-### 使用FFmpeg最新API
+## 使用FFmpeg最新API
 
-##### ~~av_register_all()~~
+### ~~av_register_all()~~
 
 废弃，不需要在入口调用`av_register_all()`进行注册所有组件。
 
-##### ~~pFormatCtx->streams[i]->codec~~->codec_type
+### ~~pFormatCtx->streams[i]->codec~~->codec_type
 
 废弃，推荐使用`pFormatCtx->streams[i]->codecpar->codec_type`
 
-##### 获取AVCodecContext的方式
+### 获取AVCodecContext的方式
 
 * 老方式
     
@@ -171,7 +171,7 @@ make install
     avcodec_parameters_to_context(pCodecCtx, pCodecParam);
     ```
 
-##### ~~avcodec_decode_video2()~~
+### ~~avcodec_decode_video2()~~
 
 废弃，推荐使用`avcodec_send_packet()`和`avcodec_receive_frame()`
 
@@ -201,15 +201,15 @@ while (ret >= 0) {
 }
 ```
 
-##### ~~av_free_packet()~~
+### ~~av_free_packet()~~
 
 废弃，推荐使用`av_packet_unref()`
 
-### 参考
+## 参考
 
-[FFmpeg Documentation](http://ffmpeg.org/doxygen/trunk/index.html)
-[av_register_all is deprecated](https://github.com/intel/libyami-utils/pull/118)
-[FFmpeg新旧接口对照使用笔记](https://blog.csdn.net/zhangwu1241/article/details/53183590)
-[ffmpeg 新老接口问题及对照集锦](https://blog.csdn.net/sukhoi27smk/article/details/18842725)
-[用AVCodecParameters代替AVCodecContext](https://blog.csdn.net/luotuo44/article/details/54981809)
+[FFmpeg Documentation](http://ffmpeg.org/doxygen/trunk/index.html)  
+[av_register_all is deprecated](https://github.com/intel/libyami-utils/pull/118)  
+[FFmpeg新旧接口对照使用笔记](https://blog.csdn.net/zhangwu1241/article/details/53183590)  
+[ffmpeg 新老接口问题及对照集锦](https://blog.csdn.net/sukhoi27smk/article/details/18842725)  
+[用AVCodecParameters代替AVCodecContext](https://blog.csdn.net/luotuo44/article/details/54981809)  
 [ffmpeg api升级到3.3 api变化](https://www.cnblogs.com/elesos/p/6866599.html)

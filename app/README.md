@@ -4,7 +4,7 @@
 2. 将MP3解码PCM，可支持其他格式音频和视频
 3. 将MP4解码YUV，可以支持其他视频，例如mkv，avi，flv
 
-### Linux下FFmpeg编译脚本
+## Linux下FFmpeg编译脚本
 
 在android-21之前不支持arm64架构，这里只编译arm架构
 
@@ -43,9 +43,9 @@ make
 make install
 ```
 
-### 音频解码
+## 音频解码
 
-##### Native方法
+### Native方法
 
 ```java
 /**
@@ -58,7 +58,7 @@ make install
 public native static int decodeAudio(String input, String output);
 ```
 
-##### 解码流程
+### 解码流程
 
 1. 注册所有组件
 
@@ -376,11 +376,11 @@ public native static int decodeAudio(String input, String output);
     (*env)->ReleaseStringUTFChars(env, output_jstr, output_cstr);
     ```
 
-### 视频解码
+## 视频解码
 
 与音频解码类似
 
-##### Native方法
+### Native方法
 
 ```java
 /**
@@ -393,7 +393,7 @@ public native static int decodeAudio(String input, String output);
 public native static int decodeVideo(String input, String output);
 ```
 
-##### 解码流程
+### 解码流程
  
 1. 注册所有组件
 
@@ -698,9 +698,9 @@ public native static int decodeVideo(String input, String output);
     (*env)->ReleaseStringUTFChars(env, output_jstr, output_cstr);
     ```
     
-### 注意
+## 注意
 
-##### 解码音频中，第一帧会返回错误码
+### 解码音频中，第一帧会返回错误码
 
 ```c
 // 解码一帧音频压缩数据，得到音频PCM数据，AVPacket->AVFrame
@@ -712,7 +712,7 @@ if (ret < 0) {
 }
 ```
 
-##### 解决方式
+### 解决方式
 
 更新FFmpeg4.0后，`avcodec_decode_audio4`过时
 
@@ -764,10 +764,10 @@ while (ret >= 0) {
 }
 ```
 
-### 参考
+## 参考
 
-[FFmpeg源代码简单分析：内存的分配和释放](https://blog.csdn.net/leixiaohua1020/article/details/41176777)
-[ffmpeg返回错误码](https://blog.csdn.net/disadministrator/article/details/43987403)
-[FFmpeg avcodec_send_packet函数错误定位](http://blog.51cto.com/fengyuzaitu/2046171)
-[最简单的基于FFmpeg的libswscale的示例（YUV转RGB）](https://blog.csdn.net/leixiaohua1020/article/details/42134965)
+[FFmpeg源代码简单分析：内存的分配和释放](https://blog.csdn.net/leixiaohua1020/article/details/41176777)  
+[ffmpeg返回错误码](https://blog.csdn.net/disadministrator/article/details/43987403)  
+[FFmpeg avcodec_send_packet函数错误定位](http://blog.51cto.com/fengyuzaitu/2046171)  
+[最简单的基于FFmpeg的libswscale的示例（YUV转RGB）](https://blog.csdn.net/leixiaohua1020/article/details/42134965)  
 [ffmpeg中的sws_scale算法性能测试](https://blog.csdn.net/leixiaohua1020/article/details/12029505)

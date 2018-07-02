@@ -1,12 +1,12 @@
-# FFmpeg_Player
+# FFmpeg播放音视频
 
 1. 在NDK r17环境下，使用老脚本，编译FFmpeg4.0动态库
 2. 将MP4解码YUV，转为RGB并绘制到UI，可以支持其他视频，例如mkv，avi，flv
 3. 播放MP3文件，可支持其他格式音频和视频
 
-### Linux下FFmpeg编译脚本
+## Linux下FFmpeg编译脚本
 
-##### 编译armeabi-v7a的脚本
+### 编译armeabi-v7a的脚本
 
 ```bash
 #!/bin/bash
@@ -64,7 +64,7 @@ make
 make install
 ```
 
-##### 编译arm64-v8a的脚本
+### 编译arm64-v8a的脚本
 
 ```bash
 #!/bin/bash
@@ -122,9 +122,9 @@ make
 make install 
 ```
 
-### 视频播放
+## 视频播放
 
-##### UI
+### UI
 
 1. 绘制到UI上，需要使用`SurfaceView`
 
@@ -204,7 +204,7 @@ make install
     </FrameLayout>
     ```
 
-##### 绘制
+### 绘制
 
 1. 将文件路径以及Surface传入
 
@@ -384,7 +384,7 @@ make install
        ANativeWindow_release(nativeWindow);
        ```
 
-##### 引入libyuv
+### 引入libyuv
 
 1. 下载libyuv，google推出的，下载地址：https://chromium.googlesource.com/external/libyuv
 使用git克隆到本次`git clone https://chromium.googlesource.com/external/libyuv`
@@ -424,7 +424,7 @@ make install
 
 7. 引入libyuv头文件，并在cmake中配置
 
-##### 编译
+### 编译
 
 此时编译发现找不到`android/native_window_jni.h`和`android/native_window.h`中的函数
 需要在cmake的`target_link_libraries`中链接`libandroid.so`
@@ -542,7 +542,7 @@ target_link_libraries( # Specifies the target library.
                        ${log-lib} )
 ```
 
-##### 思路整理
+### 思路整理
 
 1. SurfaceView创建完成时，打开文件，打开线程
 2. NDK中初始化，通过ANativeWindow绘制
@@ -553,7 +553,7 @@ target_link_libraries( # Specifies the target library.
 7. ANativeWindow_unlock
 8. 释放ANativeWindow资源
 
-##### 注意
+### 注意
 
 * 播放偏慢问题
     
@@ -574,17 +574,17 @@ target_link_libraries( # Specifies the target library.
 
 * 播放停止后，停留在最后一帧，需要手动清除SurfaceView画布，才可保证视频停止后，界面恢复初始状态
 
-##### 参考
+### 参考
 
-[Android+FFmpeg+ANativeWindow视频解码播放](https://blog.csdn.net/glouds/article/details/50937266)
-[FFmpeg - time_base,r_frame_rate](https://blog.csdn.net/biezhihua/article/details/62260498)
-[FFMPEG结构体分析：AVStream](https://blog.csdn.net/leixiaohua1020/article/details/14215821)
-[ffmpeg time_base](http://www.cnitblog.com/luofuchong/archive/2014/11/28/89869.html)
-[ffmpeg中的时间](https://www.cnblogs.com/yinxiangpei/articles/3892982.html)
-[最简单的基于FFmpeg的libswscale的示例（YUV转RGB）](https://blog.csdn.net/leixiaohua1020/article/details/42134965)
-[SurfaceView清空画布的解决方案](https://blog.csdn.net/zhangfengwu2014/article/details/78126241)
+[Android+FFmpeg+ANativeWindow视频解码播放](https://blog.csdn.net/glouds/article/details/50937266)  
+[FFmpeg - time_base,r_frame_rate](https://blog.csdn.net/biezhihua/article/details/62260498)  
+[FFMPEG结构体分析：AVStream](https://blog.csdn.net/leixiaohua1020/article/details/14215821)  
+[ffmpeg time_base](http://www.cnitblog.com/luofuchong/archive/2014/11/28/89869.html)  
+[ffmpeg中的时间](https://www.cnblogs.com/yinxiangpei/articles/3892982.html)  
+[最简单的基于FFmpeg的libswscale的示例（YUV转RGB）](https://blog.csdn.net/leixiaohua1020/article/details/42134965)  
+[SurfaceView清空画布的解决方案](https://blog.csdn.net/zhangfengwu2014/article/details/78126241)  
 
-### 音频播放
+## 音频播放
 
 播放音频解码后的PCM格式
 
@@ -593,7 +593,7 @@ target_link_libraries( # Specifies the target library.
 
 这里使用AudioTrack进行播放
 
-##### Native方法
+### Native方法
 
 ```java
 /**
@@ -605,7 +605,7 @@ target_link_libraries( # Specifies the target library.
 public native int playMusic(String input, String output);
 ```
 
-##### 创建AudioTrack
+### 创建AudioTrack
 
 ```java
 /**
@@ -646,7 +646,7 @@ private AudioTrack createAudioTrack(int sampleRateInHz, int nb_channels) {
 }
 ```
 
-##### JNI调用
+### JNI调用
 
 1. 调用`MyPlayer.createAudioTrack()`
     ```c
@@ -746,7 +746,7 @@ private AudioTrack createAudioTrack(int sampleRateInHz, int nb_channels) {
 (*env)->CallVoidMethod(env, audio_track, audio_track_release_mid);
 ```
 
-##### 如何得到字段签名
+### 如何得到字段签名
 
 1. 要找到`.class`文件目录
 
@@ -785,8 +785,8 @@ private AudioTrack createAudioTrack(int sampleRateInHz, int nb_channels) {
     }
     ```
 
-##### 参考
+### 参考
 
-[AudioTrack](https://developer.android.google.cn/reference/android/media/AudioTrack)
-[memcpy函数详解](https://blog.csdn.net/xiaominkong123/article/details/51733528/)
-[JNI内存泄露处理方法汇总](https://blog.csdn.net/wangpingfang/article/details/53945479)
+[AudioTrack](https://developer.android.google.cn/reference/android/media/AudioTrack)  
+[memcpy函数详解](https://blog.csdn.net/xiaominkong123/article/details/51733528/)  
+[JNI内存泄露处理方法汇总](https://blog.csdn.net/wangpingfang/article/details/53945479)  

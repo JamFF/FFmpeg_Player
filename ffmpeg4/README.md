@@ -2,6 +2,8 @@
 
 在NDK r17b环境下，使用新脚本，编译FFmpeg4.0.1静态库
 
+## Linux下FFmpeg编译脚本
+
 ```bash
 #!/bin/bash
 #shell脚本第一行必须是指定shell脚本解释器，这里使用的是bash解释器
