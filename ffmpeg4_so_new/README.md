@@ -49,7 +49,7 @@ INCLUDES="-isystem $NDK/sources/cxx-stl/gnu-libstdc++/4.9/include -isystem $NDK/
 --disable-static \
 --disable-programs \
 --sysroot=$SYSROOT \
---extra-cflags="-isysroot $NDK/sysroot $FLAG $INCLUDES" \
+--extra-cflags="-isysroot $NDK/sysroot $FLAG $INCLUDES"
 
 make clean
 make install
@@ -99,7 +99,7 @@ INCLUDES="-isystem $NDK/sources/cxx-stl/gnu-libstdc++/4.9/include -isystem $NDK/
 --disable-static \
 --disable-programs \
 --sysroot=$SYSROOT \
---extra-cflags="-isysroot $NDK/sysroot $FLAG $INCLUDES" \
+--extra-cflags="-isysroot $NDK/sysroot $FLAG $INCLUDES"
 
 make clean
 make install
