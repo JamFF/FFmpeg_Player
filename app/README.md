@@ -44,13 +44,13 @@ make
 make install
 ```
 
-`doc`——文档  
-`ffplay`——多媒体播放器  
-`ffprobe`——查看多媒体信息  
-`ffserver`——流媒体服务器  
-`cross-compile`——交叉编译  
-`cross-prefix`——使用交叉编译需要为其配置路径  
-`sysroot`——指定了逻辑目录
+`doc` ：文档  
+`ffplay` ：多媒体播放器  
+`ffprobe` ：查看多媒体信息  
+`ffserver` ：流媒体服务器  
+`cross-compile` ：交叉编译  
+`cross-prefix` ：使用交叉编译需要为其配置路径  
+`sysroot` ：指定了逻辑目录
 
 ## 音频解码
 
