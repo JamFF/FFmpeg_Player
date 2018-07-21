@@ -1,7 +1,7 @@
 <resources>
     <string name="app_name">FFmpeg4.0_Player</string>
-    <string name="play_video_1">PLAY_VIDEO_1</string>
-    <string name="play_video_2">PLAY_VIDEO_2</string>
-    <string name="play_music">PLAY_MUSIC</string>
+    <string name="play_video_1">仅视频1</string>
+    <string name="play_video_2">仅视频2</string>
+    <string name="play_music">仅音频</string>
     <string name="stop">STOP</string>
 </resources>
