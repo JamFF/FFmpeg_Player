@@ -456,7 +456,7 @@ add_library( # Sets the name of the library.
              SHARED
 
              # Provides a relative path to your source file(s).
-             src/main/jni/video_player.c )
+             src/main/jni/player.c )
 
 set(LIB_DIR ${CMAKE_SOURCE_DIR}/src/main/jniLibs)
 
