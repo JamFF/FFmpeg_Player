@@ -90,8 +90,8 @@ Java_com_jamff_ffmpeg_DecodeUtils_decodeVideo(JNIEnv *env, jclass type, jstring 
     int videoHeight = pCodecCtx->height;
 
     // 输出视频信息
-    LOG_I("视频的文件格式：%s", pFormatCtx->iformat->name);
-    LOG_I("视频时长：%f, %f", (pFormatCtx->duration) / 1000000.0,
+    LOG_I("多媒体格式：%s", pFormatCtx->iformat->name);
+    LOG_I("时长：%f, %f", (pFormatCtx->duration) / 1000000.0,
           stream->duration * av_q2d(stream->time_base));
     LOG_I("视频的宽高：%d, %d", videoWidth, videoHeight);
     LOG_I("解码器的名称：%s", pCodec->name);
