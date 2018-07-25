@@ -1,4 +1,4 @@
-#include <jni.h>
+#include "com_jamff_ffmpeg_MyPlayer.h"
 #include <stdlib.h>
 #include <stdio.h>
 #include <android/log.h>
@@ -196,7 +196,7 @@ Java_com_jamff_ffmpeg_MyPlayer_playMusic(JNIEnv *env, jobject instance, jstring 
     // JNI-----------------------end
 
     // 输出文件
-    FILE *fp_pcm = fopen(output_cstr, "wb");
+    // FILE *fp_pcm = fopen(output_cstr, "wb");
 
     int ret;
 
@@ -294,7 +294,7 @@ Java_com_jamff_ffmpeg_MyPlayer_playMusic(JNIEnv *env, jobject instance, jstring 
     (*env)->CallVoidMethod(env, audio_track, audio_track_release_mid);
 
     // 关闭文件
-    fclose(fp_pcm);
+    // fclose(fp_pcm);
 
     // 释放AVFrame
     av_frame_free(&pFrame);

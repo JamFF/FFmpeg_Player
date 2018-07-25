@@ -1,4 +1,4 @@
-#include <jni.h>
+#include "com_jamff_ffmpeg_DecodeUtils.h"
 #include <stdlib.h>
 #include <stdio.h>
 #include <android/log.h>
