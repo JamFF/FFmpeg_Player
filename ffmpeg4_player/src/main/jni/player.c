@@ -1,7 +1,8 @@
-#include <jni.h>
+#include "com_jamff_ffmpeg_MyPlayer.h"
 #include <stdlib.h>
 #include <stdio.h>
 #include <unistd.h>
+#include <pthread.h>
 #include <android/log.h>
 // 需要引入native绘制的头文件
 #include <android/native_window_jni.h>
@@ -22,6 +23,9 @@
 
 #define LOG_I(FORMAT, ...) __android_log_print(ANDROID_LOG_INFO,"JamFF",FORMAT,##__VA_ARGS__);
 #define LOG_E(FORMAT, ...) __android_log_print(ANDROID_LOG_ERROR,"JamFF",FORMAT,##__VA_ARGS__);
+
+// nb_streams，视频文件中存在，音频流，视频流，字幕，这里不考虑字幕，所以设置为2
+#define MAX_STREAM 2
 
 // 停止的标记位
 int flag;
@@ -202,40 +206,61 @@ Java_com_jamff_ffmpeg_MyPlayer_render(JNIEnv *env, jobject instance, jstring inp
     return 0;
 }
 
-JNIEXPORT jint JNICALL
-Java_com_jamff_ffmpeg_MyPlayer_play(JNIEnv *env, jobject instance, jstring input_,
-                                    jobject surface) {
-    LOG_I("play");
 
-    const char *input_cstr = (*env)->GetStringUTFChars(env, input_, 0);
+struct Player {
+    // 封装格式上下文
+    AVFormatContext *input_format_ctx;
+    // 音频流索引位置
+    int video_stream_index;
+    // 视频流索引位置
+    int audio_stream_index;
+    // 解码器上下文数组
+    AVCodecContext *input_codec_ctx[MAX_STREAM];
+    // 解码线程ID
+    pthread_t decode_threads[MAX_STREAM];
+};
+
+/**
+ * 初始化封装格式上下文，获取音频视频流的索引位置
+ * @param player
+ * @param input_cstr
+ * @return
+ */
+int init_input_format_ctx(struct Player *player, const char *input_cstr) {
 
     // 1.注册所有组件
     av_register_all();
-
+    // TODO player->input_format_ctx没赋值
     // 封装格式上下文，统领全局的结构体，保存了视频文件封装格式的相关信息
-    AVFormatContext *pFormatCtx = avformat_alloc_context();
+    AVFormatContext *format_ctx = avformat_alloc_context();
 
     // 2.打开输入视频文件
-    int av_error = avformat_open_input(&pFormatCtx, input_cstr, NULL, NULL);
+    int av_error = avformat_open_input(&format_ctx, input_cstr, NULL, NULL);
     if (av_error != 0) {
         LOG_E("error:%d Couldn't open file:%s,", av_error, input_cstr);
         return -1;
     }
 
     // 3.获取视频文件信息
-    if (avformat_find_stream_info(pFormatCtx, NULL) < 0) {
+    if (avformat_find_stream_info(format_ctx, NULL) < 0) {
         LOG_E("Couldn't find stream information");
         return -1;
     }
 
-    // 视频解码，需要找到视频对应的AVStream所在pFormatCtx->streams的索引位置
-    int video_stream_idx = -1, i;
+    // 音频，视频解码，需要找到对应的AVStream所在format_ctx->streams的索引位置
+    int video_stream_idx = -1;
+    int audio_stream_idx = -1;
+    int i;
     // 遍历所有类型的流（音频流、视频流、字幕流）
-    for (i = 0; i < pFormatCtx->nb_streams; i++) {
-        if (pFormatCtx->streams[i]->codecpar->codec_type == AVMEDIA_TYPE_VIDEO
+    for (i = 0; i < format_ctx->nb_streams; i++) {
+        if (format_ctx->streams[i]->codecpar->codec_type == AVMEDIA_TYPE_VIDEO
             && video_stream_idx < 0) {
             // 获取视频流的索引位置
             video_stream_idx = i;
+        } else if (format_ctx->streams[i]->codecpar->codec_type == AVMEDIA_TYPE_VIDEO
+                   && audio_stream_idx < 0) {
+            // 获取视频流的索引位置
+            audio_stream_idx = i;
         }
     }
 
@@ -243,45 +268,108 @@ Java_com_jamff_ffmpeg_MyPlayer_play(JNIEnv *env, jobject instance, jstring input
         // 找不到视频流
         LOG_E("Didn't find a video stream");
         return -1;
+    } else if (audio_stream_idx == -1) {
+        LOG_E("Didn't find a audio stream");
+        return -1;
+    } else {
+        LOG_I("video_stream_index = %d, audio_stream_index = %d", video_stream_idx,
+              video_stream_idx);
+        player->video_stream_index = video_stream_idx;
+        player->audio_stream_index = audio_stream_idx;
+        player->input_format_ctx = format_ctx;
     }
 
-    // 视频对应的AVStream
-    AVStream *stream = pFormatCtx->streams[video_stream_idx];
+    return 0;
+}
 
-    // 视频帧率，每秒多少帧
-    double frame_rate = av_q2d(stream->avg_frame_rate);
-    LOG_I("帧率 = %f", frame_rate);
+/**
+ * 初始化解码器上下文
+ * @param player
+ * @param stream_index
+ * @return
+ */
+int init_codec_context(struct Player *player, int stream_index) {
 
-    // 只有知道视频的编码方式，才能够根据编码方式去找到解码器
-    // 4.获取视频流中的编解码器上下文
-    AVCodecContext *pCodecCtx = stream->codec;
+    AVFormatContext *format_ctx = player->input_format_ctx;
 
-    // 5.根据编解码上下文中的编码id查找对应的视频解码器
-    AVCodec *pCodec = avcodec_find_decoder(pCodecCtx->codec_id);
-    // 例如加密或者没有该编码的解码器
+    // 音频、视频对应的AVStream
+    AVStream *stream = format_ctx->streams[stream_index];
+
+    // 只有知道编码方式，才能够根据编码方式去找到解码器
+    // 4.获取音频流、视频流中的编解码器上下文
+    AVCodecContext *codec_ctx = stream->codec;
+
+    // 5.根据编解码上下文中的编码id查找对应的解码器
+    AVCodec *pCodec = avcodec_find_decoder(codec_ctx->codec_id);
+    // 加密或者没有该编码的解码器
     if (pCodec == NULL) {
-        // 迅雷看看，找不到解码器，临时下载一个解码器
         LOG_E("Codec not found");
         return -1;
     }
+    LOG_I("解码器的名称：%s", pCodec->name);
 
     // 6.打开解码器
-    if (avcodec_open2(pCodecCtx, pCodec, NULL) < 0) {
+    if (avcodec_open2(codec_ctx, pCodec, NULL) < 0) {
         LOG_E("Could not open codec");
         return -1;
     }
+    // TODO 不理解，一般情况视频是0，音频是1
+    player->input_codec_ctx[stream_index] = codec_ctx;
+    return 0;
+}
 
+/**
+ * 解码子线程函数
+ * @param arg
+ * @return
+ */
+void *decode_data(void *arg) {
+    struct Player *player = (struct Player *) arg;
+}
+
+JNIEXPORT jint JNICALL
+Java_com_jamff_ffmpeg_MyPlayer_play(JNIEnv *env, jobject instance, jstring input_,
+                                    jobject surface) {
+    LOG_I("play");
+
+    const char *input_cstr = (*env)->GetStringUTFChars(env, input_, 0);
+
+    struct Player *player = (struct Player *) malloc(sizeof(struct Player));
+
+    // 初始化封装格式上下文
+    if (init_input_format_ctx(player, input_cstr) < 0) {
+        return -1;
+    }
+
+    int video_stream_index = player->video_stream_index;
+    int audio_stream_index = player->audio_stream_index;
+    // 获取视频解码器并打开
+    if (init_codec_context(player, video_stream_index) < 0) {
+        return -1;
+    }
+    // 获取音频解码器并打开
+    if (init_codec_context(player, audio_stream_index) < 0) {
+        return -1;
+    }
+
+    // 视频AVCodecContext
+    AVCodecContext *pCodecCtx = player->input_codec_ctx[video_stream_index];
     // 获取视频宽高
     int videoWidth = pCodecCtx->width;
     int videoHeight = pCodecCtx->height;
 
     // 输出视频信息
-    // 输出视频信息
-    LOG_I("视频的文件格式：%s", pFormatCtx->iformat->name);
-    LOG_I("视频时长：%f, %f", (pFormatCtx->duration) / 1000000.0,
+    LOG_I("多媒体格式：%s", player->input_format_ctx->iformat->name);
+    // 视频AVStream
+    AVStream *stream = player->input_format_ctx->streams[video_stream_index];
+    LOG_I("时长：%f, %f", (player->input_format_ctx->duration) / 1000000.0,
           stream->duration * av_q2d(stream->time_base));
     LOG_I("视频的宽高：%d, %d", videoWidth, videoHeight);
-    LOG_I("解码器的名称：%s", pCodec->name);
+
+
+    // 创建子线程解码
+    pthread_create(&(player->decode_threads[video_stream_index]), NULL, decode_data,
+                   (void *) player);
 
     // 准备读取
     // AVPacket，编码数据，用于存储一帧一帧的压缩数据（H264）
@@ -335,7 +423,7 @@ Java_com_jamff_ffmpeg_MyPlayer_play(JNIEnv *env, jobject instance, jstring input
     flag = 1;
 
     // 7.一帧一帧的读取压缩视频数据AVPacket
-    while (av_read_frame(pFormatCtx, &packet) >= 0 && flag) {
+    while (av_read_frame(format_ctx, &packet) >= 0 && flag) {
         // 只要视频压缩数据（根据流的索引位置判断）
         if (packet.stream_index == video_stream_idx) {
             // 8.解码一帧视频压缩数据，得到视频像素数据，AVPacket->AVFrame
@@ -402,9 +490,11 @@ Java_com_jamff_ffmpeg_MyPlayer_play(JNIEnv *env, jobject instance, jstring input
     avcodec_close(pCodecCtx);
 
     // 释放AVFormatContext
-    avformat_close_input(&pFormatCtx);
+    avformat_close_input(&format_ctx);
 
     (*env)->ReleaseStringUTFChars(env, input_, input_cstr);
+
+    free(player);
 
     return 0;
 }
