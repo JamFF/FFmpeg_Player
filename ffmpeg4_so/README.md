@@ -748,13 +748,13 @@ private AudioTrack createAudioTrack(int sampleRateInHz, int nb_channels) {
 
 ### 如何得到字段签名
 
-1. 要找到`.class`文件目录
+1. 要找到 `.class` 文件目录
 
-    Android Studio的目录在`ffmpeg4_so\build\intermediates\classes`目录下
+    Android Studio的目录在 `ffmpeg4_so\build\intermediates\classes` 目录下
 
-2. 进入`ffmpeg4_so\build\intermediates\classes\debug`打开命令行
+2. 进入 `ffmpeg4_so\build\intermediates\classes\debug` 打开命令行
 
-3. 输入`javap -s -p 完整类名`就可得到字段签名
+3. 输入 `javap -s -p 完整类名` 就可得到字段签名
 
     ```
     javap -s -p com.jamff.ffmpeg.MyPlayer
