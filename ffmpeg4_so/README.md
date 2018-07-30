@@ -648,7 +648,7 @@ private AudioTrack createAudioTrack(int sampleRateInHz, int nb_channels) {
 
 ### JNI调用
 
-1. 调用`MyPlayer.createAudioTrack()`
+1. 调用 `MyPlayer.createAudioTrack()`
     ```c
     // 获取MyPlayer的jclass
     jclass player_class = (*env)->GetObjectClass(env, instance);
@@ -665,7 +665,7 @@ private AudioTrack createAudioTrack(int sampleRateInHz, int nb_channels) {
                                                    out_channel_nb);// createAudioTrack的参数
     ```
 
-2. 调用`AudioTrack.play()`
+2. 调用 `AudioTrack.play()`
 
     ```c
     // 获取AudioTrack的jclass
@@ -678,7 +678,7 @@ private AudioTrack createAudioTrack(int sampleRateInHz, int nb_channels) {
     (*env)->CallVoidMethod(env, audio_track, audio_track_play_mid);
     ```
 
-3. 其他`AudioTrack`方法
+3. 其他 `AudioTrack` 方法
 
     ```c
     // 得到AudioTrack.write()
@@ -695,7 +695,7 @@ private AudioTrack createAudioTrack(int sampleRateInHz, int nb_channels) {
 
 4. 调用`AudioTrack.write()`
 
-    1. `out_buffer`缓冲区数据，转成`byte`数组
+    1. `out_buffer` 缓冲区数据，转成 `byte` 数组
     
         ```c
         // 调用AudioTrack.write()时，需要创建jbyteArray
@@ -718,7 +718,7 @@ private AudioTrack createAudioTrack(int sampleRateInHz, int nb_channels) {
                                          sample_bytep, 0);
         ```
     
-    2. 调用`AudioTrack.write()`
+    2. 调用 `AudioTrack.write()`
 
         ```c
         (*env)->CallIntMethod(env, audio_track, audio_track_write_mid,
