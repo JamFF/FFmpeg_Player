@@ -260,7 +260,7 @@ int init_input_format_ctx(struct Player *player, const char *input_cstr) {
             && video_stream_idx < 0) {
             // 获取视频流的索引位置
             video_stream_idx = i;
-        } else if (format_ctx->streams[i]->codecpar->codec_type == AVMEDIA_TYPE_VIDEO
+        } else if (format_ctx->streams[i]->codecpar->codec_type == AVMEDIA_TYPE_AUDIO
                    && audio_stream_idx < 0) {
             // 获取视频流的索引位置
             audio_stream_idx = i;
@@ -353,9 +353,15 @@ int decode_video(struct Player *player, AVPacket *packet) {
 
         // 为0说明解码完成，非0正在解码
         if (got_picture) {
-            // TODO
-            double cur_time = packet->pts * av_q2d(pCodecCtx->time_base);
-            // double cur_time = pFrame->pts * av_q2d(pCodecCtx->time_base);// 值相等，拷贝自AVPacket的pts
+            // 四种获取方式
+            /*double cur_time = packet->pts *
+                              av_q2d(player->input_format_ctx->streams[player->video_stream_index]->time_base);*/
+            // 值相等，AVFrame拷贝自AVPacket的pts
+            /*double cur_time = pFrame->pts *
+                              av_q2d(player->input_format_ctx->streams[player->video_stream_index]->time_base);*/
+            double cur_time = packet->pts * av_q2d(pCodecCtx->time_base) / 1000;
+            // 值相等，AVFrame拷贝自AVPacket的pts
+            // double cur_time = pFrame->pts * av_q2d(pCodecCtx->time_base) / 1000;
             LOG_I("解码%f秒", cur_time);
 
             // 2、设置缓冲区的属性（宽、高、像素格式），像素格式要和SurfaceView的像素格式一直
@@ -435,7 +441,7 @@ void decode_video_prepare(JNIEnv *env, struct Player *player, jobject surface) {
     player->nativeWindow = ANativeWindow_fromSurface(env, surface);
 }
 
-JNIEXPORT jint JNICALL
+JNIEXPORT void JNICALL
 Java_com_jamff_ffmpeg_MyPlayer_play(JNIEnv *env, jobject instance, jstring input_,
                                     jobject surface) {
     LOG_I("play");
@@ -446,18 +452,18 @@ Java_com_jamff_ffmpeg_MyPlayer_play(JNIEnv *env, jobject instance, jstring input
 
     // 初始化封装格式上下文
     if (init_input_format_ctx(player, input_cstr) < 0) {
-        return -1;
+        return;
     }
 
     int video_stream_index = player->video_stream_index;
     int audio_stream_index = player->audio_stream_index;
     // 获取视频解码器并打开
     if (init_codec_context(player, video_stream_index) < 0) {
-        return -1;
+        return;
     }
     // 获取音频解码器并打开
     if (init_codec_context(player, audio_stream_index) < 0) {
-        return -1;
+        return;
     }
 
     // 视频AVCodecContext
@@ -485,8 +491,6 @@ Java_com_jamff_ffmpeg_MyPlayer_play(JNIEnv *env, jobject instance, jstring input
     // 创建子线程解码
     pthread_create(&(player->decode_threads[video_stream_index]), NULL, decode_data,
                    (void *) player);
-
-    return 0;
 }
 
 JNIEXPORT void JNICALL

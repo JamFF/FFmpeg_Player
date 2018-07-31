@@ -36,7 +36,7 @@ public class MyPlayer {
      * @param surface {@link android.view.Surface}
      * @return 0成功，-1失败
      */
-    public native int play(String input, Surface surface);
+    public native void play(String input, Surface surface);
 
     /**
      * 创建AudioTrack，提供给C调用

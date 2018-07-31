@@ -92,11 +92,10 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
     public void onClick(View v) {
         switch (v.getId()) {
             case R.id.bt_play_video_1:
+                playVideo();
+                break;
             case R.id.bt_play_video_2:
-                if (!checkVideoFile()) {
-                    break;
-                }
-                playVideo(v.getId());
+                renderVideo();
                 break;
             case R.id.bt_stop:
                 mPlayer.stop();
@@ -125,11 +124,13 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
     }
 
     /**
-     * 视频播放
-     *
-     * @param id 区分两种YUV420P->RGBA_8888的方式
+     * Java IO线程视频播放
      */
-    private void playVideo(final int id) {
+    private void playVideo() {
+
+        if (!checkVideoFile()) {
+            return;
+        }
 
         bt_play_video_1.setEnabled(false);
         bt_play_video_2.setEnabled(false);
@@ -144,22 +145,34 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         new Thread(new Runnable() {
             @Override
             public void run() {
-                int result;
-                if (id == R.id.bt_play_video_1) {
-                    // Surface传递到Native函数中，用于绘制
-                    result = mPlayer.render(videoFile.getAbsolutePath(), mSurface);
-                } else if (id == R.id.bt_play_video_2) {
-                    // 第二种方式，不使用libyuv
-                    result = mPlayer.play(videoFile.getAbsolutePath(), mSurface);
-                } else {
-                    result = -1;
-                    Log.e(TAG, "start: id error");
-                }
-                complete(result);
+                // 阻塞
+                complete(mPlayer.render(videoFile.getAbsolutePath(), mSurface));
             }
         }).start();
     }
 
+    /**
+     * C IO线程视频播放
+     */
+    private void renderVideo() {
+
+        if (!checkVideoFile()) {
+            return;
+        }
+
+        bt_play_video_1.setEnabled(false);
+        bt_play_video_2.setEnabled(false);
+        bt_play_music_video.setEnabled(false);
+        bt_stop.setEnabled(true);
+
+        if (mSurface == null) {
+            Log.e(TAG, "start: mSurface == null");
+            return;
+        }
+
+        mPlayer.play(videoFile.getAbsolutePath(), mSurface);
+        // TODO 需要回调处理
+    }
 
 
     /**

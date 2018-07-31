@@ -20,7 +20,7 @@ JNIEXPORT jint JNICALL Java_com_jamff_ffmpeg_MyPlayer_render
  * Method:    play
  * Signature: (Ljava/lang/String;Ljava/lang/Object;)I
  */
-JNIEXPORT jint JNICALL Java_com_jamff_ffmpeg_MyPlayer_play
+JNIEXPORT void JNICALL Java_com_jamff_ffmpeg_MyPlayer_play
   (JNIEnv *, jobject, jstring, jobject);
 
 /*
