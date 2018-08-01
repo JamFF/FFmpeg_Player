@@ -13,15 +13,15 @@ extern "C" {
  * Signature: (Ljava/lang/String;Ljava/lang/Object;)I
  */
 JNIEXPORT jint JNICALL Java_com_jamff_ffmpeg_MyPlayer_render
-  (JNIEnv *, jobject, jstring, jobject);
+        (JNIEnv *, jobject, jstring, jobject);
 
 /*
  * Class:     com_jamff_ffmpeg_MyPlayer
  * Method:    play
- * Signature: (Ljava/lang/String;Ljava/lang/Object;)I
+ * Signature: (Ljava/lang/String;Ljava/lang/Object;)V
  */
 JNIEXPORT void JNICALL Java_com_jamff_ffmpeg_MyPlayer_play
-  (JNIEnv *, jobject, jstring, jobject);
+        (JNIEnv *, jobject, jstring, jobject);
 
 /*
  * Class:     com_jamff_ffmpeg_MyPlayer
@@ -29,7 +29,7 @@ JNIEXPORT void JNICALL Java_com_jamff_ffmpeg_MyPlayer_play
  * Signature: ()V
  */
 JNIEXPORT void JNICALL Java_com_jamff_ffmpeg_MyPlayer_stop
-  (JNIEnv *, jobject);
+        (JNIEnv *, jobject);
 
 #ifdef __cplusplus
 }
