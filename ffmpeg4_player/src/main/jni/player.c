@@ -24,7 +24,7 @@
 #define LOG_I(FORMAT, ...) __android_log_print(ANDROID_LOG_INFO,"JamFF",FORMAT,##__VA_ARGS__);
 #define LOG_E(FORMAT, ...) __android_log_print(ANDROID_LOG_ERROR,"JamFF",FORMAT,##__VA_ARGS__);
 
-// nb_streams，视频文件中存在，音频流，视频流，字幕，这里不考虑字幕，所以设置为2
+// nb_streams，媒体文件中存在，音频流，视频流，字幕，这里不考虑字幕，所以设置为2
 #define MAX_STREAM 2
 
 // 停止的标记位
