@@ -237,14 +237,14 @@ int init_input_format_ctx(struct Player *player, const char *input_cstr) {
     // 封装格式上下文，统领全局的结构体，保存了视频文件封装格式的相关信息
     AVFormatContext *format_ctx = avformat_alloc_context();
 
-    // 2.打开输入视频文件
+    // 2.打开输入媒体文件
     int av_error = avformat_open_input(&format_ctx, input_cstr, NULL, NULL);
     if (av_error != 0) {
         LOG_E("error:%d Couldn't open file:%s,", av_error, input_cstr);
         return -1;
     }
 
-    // 3.获取视频文件信息
+    // 3.获取媒体文件信息
     if (avformat_find_stream_info(format_ctx, NULL) < 0) {
         LOG_E("Couldn't find stream information");
         return -1;
@@ -262,7 +262,7 @@ int init_input_format_ctx(struct Player *player, const char *input_cstr) {
             video_stream_idx = i;
         } else if (format_ctx->streams[i]->codecpar->codec_type == AVMEDIA_TYPE_AUDIO
                    && audio_stream_idx < 0) {
-            // 获取视频流的索引位置
+            // 获取音频流的索引位置
             audio_stream_idx = i;
         }
     }
@@ -272,6 +272,7 @@ int init_input_format_ctx(struct Player *player, const char *input_cstr) {
         LOG_E("Didn't find a video stream");
         return -1;
     } else if (audio_stream_idx == -1) {
+        // 找不到音频流
         LOG_E("Didn't find a audio stream");
         return -1;
     } else {
