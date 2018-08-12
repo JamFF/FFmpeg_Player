@@ -9,10 +9,18 @@ extern "C" {
 #endif
 /*
  * Class:     com_jamff_ffmpeg_MyPlayer
- * Method:    render
- * Signature: (Ljava/lang/String;Ljava/lang/Object;)I
+ * Method:    init
+ * Signature: ()V
  */
-JNIEXPORT jint JNICALL Java_com_jamff_ffmpeg_MyPlayer_render
+JNIEXPORT void JNICALL Java_com_jamff_ffmpeg_MyPlayer_init
+        (JNIEnv *, jobject);
+
+/*
+ * Class:     com_jamff_ffmpeg_MyPlayer
+ * Method:    render
+ * Signature: (Ljava/lang/String;Ljava/lang/Object;)V
+ */
+JNIEXPORT void JNICALL Java_com_jamff_ffmpeg_MyPlayer_render
         (JNIEnv *, jobject, jstring, jobject);
 
 /*
@@ -29,6 +37,14 @@ JNIEXPORT void JNICALL Java_com_jamff_ffmpeg_MyPlayer_play
  * Signature: ()V
  */
 JNIEXPORT void JNICALL Java_com_jamff_ffmpeg_MyPlayer_stop
+        (JNIEnv *, jobject);
+
+/*
+ * Class:     com_jamff_ffmpeg_MyPlayer
+ * Method:    destroy
+ * Signature: ()V
+ */
+JNIEXPORT void JNICALL Java_com_jamff_ffmpeg_MyPlayer_destroy
         (JNIEnv *, jobject);
 
 #ifdef __cplusplus

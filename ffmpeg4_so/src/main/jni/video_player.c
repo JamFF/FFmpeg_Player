@@ -371,7 +371,7 @@ Java_com_jamff_ffmpeg_MyPlayer_play(JNIEnv *env, jobject instance, jstring input
                 // 5、由于window的stride和帧的stride不同，因此需要逐行复制
                 int h;
                 for (h = 0; h < videoHeight; h++) {
-                    memcpy(dst + h * dstStride, src + h * srcStride, srcStride);
+                    memcpy(dst + h * dstStride, src + h * srcStride, (size_t) srcStride);
                 }
 
                 // 6、unlock绘制

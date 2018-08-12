@@ -12,11 +12,11 @@ import android.view.Surface;
  */
 public class MyPlayer {
 
+    private AudioTrack mAudioTrack;
+
     public AudioTrack getAudioTrack() {
         return mAudioTrack;
     }
-
-    private AudioTrack mAudioTrack;
 
     /**
      * 使用libyuv将YUV转换为RGB，进行播放

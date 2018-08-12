@@ -27,184 +27,28 @@
 // nb_streams，媒体文件中存在，音频流，视频流，字幕，这里不考虑字幕，所以设置为2
 #define MAX_STREAM 2
 
+// JavaVM 代表的是Java虚拟机，所有的工作都是从JavaVM开始
+// 可以通过JavaVM获取到每个线程关联的JNIEnv
+
+// 如何获取JavaVM？
+// 1.在JNI_OnLoad函数中获取// 2.2以后版本
+// 2.(*env)->GetJavaVM(env,&javaVM);// 兼容各个版本
+
+JavaVM *javaVM;
+jobject player_global;
+jmethodID player_completion_mid;
+
+// 动态库加载时会执行
+// Android SDK 2.2之后才有，2.2没有这个函数
+JNIEXPORT jint JNI_OnLoad(JavaVM *vm, void *reserved) {
+    LOG_I("%s", "JNI_OnLoad");
+    // 获取JavaVM
+    javaVM = vm;
+    return JNI_VERSION_1_4;
+}
+
 // 停止的标记位
 int flag;
-
-JNIEXPORT int JNICALL
-Java_com_jamff_ffmpeg_MyPlayer_render(JNIEnv *env, jobject instance, jstring input_jstr,
-                                      jobject surface) {
-    LOG_I("render");
-
-    const char *input_cstr = (*env)->GetStringUTFChars(env, input_jstr, 0);
-
-    // 1.注册所有组件
-    av_register_all();
-
-    // 封装格式上下文，统领全局的结构体，保存了视频文件封装格式的相关信息
-    AVFormatContext *pFormatCtx = avformat_alloc_context();
-
-    // 2.打开输入视频文件
-    int av_error = avformat_open_input(&pFormatCtx, input_cstr, NULL, NULL);
-    if (av_error != 0) {
-        LOG_E("error:%d, %s,", av_error, "无法打开输入视频文件");
-        return -1;
-    }
-
-    // 3.获取视频文件信息
-    if (avformat_find_stream_info(pFormatCtx, NULL) < 0) {
-        LOG_E("无法获取视频文件信息");
-        return -1;
-    }
-
-    // 视频解码，需要找到视频对应的AVStream所在pFormatCtx->streams的索引位置
-    int video_stream_idx = -1;
-    int i;
-    // 遍历所有类型的流（音频流、视频流、字幕流）
-    for (i = 0; i < pFormatCtx->nb_streams; i++) {
-        // 根据类型判断，找到视频流
-        if (pFormatCtx->streams[i]->codecpar->codec_type == AVMEDIA_TYPE_VIDEO) {
-            // 获取视频流的索引位置
-            video_stream_idx = i;
-            break;
-        }
-    }
-
-    if (video_stream_idx == -1) {
-        LOG_E("找不到视频流");
-        return -1;
-    }
-
-    // 视频对应的AVStream
-    AVStream *stream = pFormatCtx->streams[video_stream_idx];
-
-    // 视频帧率，每秒多少帧
-    double frame_rate = av_q2d(stream->avg_frame_rate);
-    LOG_I("帧率 = %f", frame_rate);
-
-    // 只有知道视频的编码方式，才能够根据编码方式去找到解码器
-    // 4.获取视频流中的编解码器上下文
-    AVCodecContext *pCodecCtx = stream->codec;
-
-    // 5.根据编解码上下文中的编码id查找对应的视频解码器
-    AVCodec *pCodec = avcodec_find_decoder(pCodecCtx->codec_id);
-    // 例如加密或者没有该编码的解码器
-    if (pCodec == NULL) {
-        // 迅雷看看，找不到解码器，临时下载一个解码器
-        LOG_E("找不到解码器");
-        return -1;
-    }
-
-    // 6.打开解码器
-    if (avcodec_open2(pCodecCtx, pCodec, NULL) < 0) {
-        LOG_E("解码器无法打开");
-        return -1;
-    }
-
-    // 获取视频宽高
-    int videoWidth = pCodecCtx->width;
-    int videoHeight = pCodecCtx->height;
-
-    // 输出视频信息
-    LOG_I("视频的文件格式：%s", pFormatCtx->iformat->name);
-    LOG_I("视频时长：%f, %f", (pFormatCtx->duration) / 1000000.0,
-          stream->duration * av_q2d(stream->time_base));
-    LOG_I("视频的宽高：%d, %d", videoWidth, videoHeight);
-    LOG_I("解码器的名称：%s", pCodec->name);
-
-    // 准备读取
-    // AVPacket，编码数据，用于存储一帧一帧的压缩数据（H264）
-    // 缓冲区，开辟空间
-    AVPacket *packet = av_malloc(sizeof(AVPacket));
-
-    // AVFrame，像素数据（解码数据），用于存储解码后的像素数据(YUV)
-    // 内存分配
-    AVFrame *pFrame = av_frame_alloc();// 实际就是YUV420P
-
-    /************************************* native绘制 start *************************************/
-    AVFrame *pRGBFrame = av_frame_alloc();// RGB
-
-    // 1、获取一个关联Surface的NativeWindow窗体
-    ANativeWindow *nativeWindow = ANativeWindow_fromSurface(env, surface);
-    // 2、设置缓冲区的属性（宽、高、像素格式），像素格式要和SurfaceView的像素格式一直
-    ANativeWindow_setBuffersGeometry(nativeWindow, videoWidth, videoHeight,
-                                     WINDOW_FORMAT_RGBA_8888);
-    // 绘制时的缓冲区
-    ANativeWindow_Buffer outBuffer;
-
-    /************************************* native绘制 end ***************************************/
-
-    int got_picture, ret;
-
-    int frame_count = 0;
-
-    // 间隔是微秒
-    int sleep = (int) (1000 * 1000 / frame_rate);
-
-    flag = 1;
-
-    // 7.一帧一帧的读取压缩视频数据AVPacket
-    while (av_read_frame(pFormatCtx, packet) >= 0 && flag) {
-        // 只要视频压缩数据（根据流的索引位置判断）
-        if (packet->stream_index == video_stream_idx) {
-            // 8.解码一帧视频压缩数据，得到视频像素数据，AVPacket->AVFrame
-            ret = avcodec_decode_video2(pCodecCtx, pFrame, &got_picture, packet);
-            if (ret < 0) {
-                LOG_E("解码错误");
-                return -1;
-            }
-
-            // 为0说明解码完成，非0正在解码
-            if (got_picture) {
-
-                double cur_time = packet->pts * av_q2d(stream->time_base);
-                // double cur_time = pFrame->pts * av_q2d(stream->time_base);// 值相等，拷贝自AVPacket的pts
-                LOG_I("解码%d帧, %f秒", ++frame_count, cur_time);
-
-                // 9. 绘制
-                // 3、lock锁定下一个即将要绘制的Surface
-                ANativeWindow_lock(nativeWindow, &outBuffer, NULL);
-
-                // 4、读取帧画面放入缓冲区，指定RGB的AVFrame的像素格式、宽高和缓冲区
-                avpicture_fill((AVPicture *) pRGBFrame,
-                               outBuffer.bits,// 转换RGB的缓冲区，就使用绘制时的缓冲区，即可完成Surface绘制
-                               AV_PIX_FMT_RGBA,// 像素格式
-                               videoWidth, videoHeight);
-
-                // 5、将YUV420P->RGBA_8888
-                I420ToARGB(pFrame->data[0], pFrame->linesize[0],// Y
-                           pFrame->data[2], pFrame->linesize[2],// V
-                           pFrame->data[1], pFrame->linesize[1],// U
-                           pRGBFrame->data[0], pRGBFrame->linesize[0],
-                           videoWidth, videoHeight);
-
-                // 6、unlock绘制
-                ANativeWindow_unlockAndPost(nativeWindow);
-
-                // FIXME 由于解码需要时间，这样设置播放会偏慢，目前没有解决方式
-                usleep((useconds_t) sleep);
-            }
-        }
-        // 释放资源
-        av_packet_unref(packet);// av_packet_unref代替过时的av_free_packet
-    }
-
-    // 7、释放资源
-    ANativeWindow_release(nativeWindow);
-
-    // 释放AVFrame
-    av_frame_free(&pFrame);
-    av_frame_free(&pRGBFrame);
-
-    // 关闭解码器
-    avcodec_close(pCodecCtx);
-
-    // 释放AVFormatContext
-    avformat_free_context(pFormatCtx);
-
-    (*env)->ReleaseStringUTFChars(env, input_jstr, input_cstr);
-
-    return 0;
-}
 
 struct Player {
     // 封装格式上下文
@@ -325,78 +169,138 @@ int init_codec_context(struct Player *player, int stream_index) {
  */
 int decode_video(struct Player *player, AVPacket *packet) {
 
-    // 只要视频压缩数据（根据流的索引位置判断）
-    if (packet->stream_index == player->video_stream_index) {
+    int got_picture, ret;
 
-        int got_picture, ret;
+    // AVFrame，像素数据（解码数据），用于存储解码后的像素数据(YUV)
+    // 内存分配
+    AVFrame *pFrame = av_frame_alloc();// 实际就是YUV420P
+    AVFrame *pRGBFrame = av_frame_alloc();// RGB，用于渲染
 
-        // AVFrame，像素数据（解码数据），用于存储解码后的像素数据(YUV)
-        // 内存分配
-        AVFrame *pFrame = av_frame_alloc();// 实际就是YUV420P
-        AVFrame *pRGBFrame = av_frame_alloc();// RGB
+    if (pRGBFrame == NULL || pFrame == NULL) {
+        LOG_E("Could not allocate video frame");
+        return -1;
+    }
 
-        // 绘制时的缓冲区
-        ANativeWindow_Buffer outBuffer;
+    // 绘制时的缓冲区
+    ANativeWindow_Buffer outBuffer;
 
-        AVCodecContext *pCodecCtx = player->input_codec_ctx[player->video_stream_index];
+    AVCodecContext *pCodecCtx = player->input_codec_ctx[player->video_stream_index];
 
-        // 8.解码一帧视频压缩数据，得到视频像素数据，AVPacket->AVFrame
-        ret = avcodec_decode_video2(pCodecCtx, pFrame, &got_picture, packet);
-        if (ret < 0) {
-            LOG_E("解码错误");
-            return -1;
-        }
+    // 8.解码一帧视频压缩数据，得到视频像素数据，AVPacket->AVFrame
+    ret = avcodec_decode_video2(pCodecCtx, pFrame, &got_picture, packet);
+    if (ret < 0) {
+        LOG_E("解码错误");
+        return -1;
+    }
 
-        // 为0说明解码完成，非0正在解码
-        if (got_picture) {
-            // 四种获取方式
-            /*double cur_time = packet->pts *
-                              av_q2d(player->input_format_ctx->streams[player->video_stream_index]->time_base);*/
-            // 值相等，AVFrame拷贝自AVPacket的pts
-            /*double cur_time = pFrame->pts *
-                              av_q2d(player->input_format_ctx->streams[player->video_stream_index]->time_base);*/
-            double cur_time = packet->pts * av_q2d(pCodecCtx->time_base) / 1000;
-            // 值相等，AVFrame拷贝自AVPacket的pts
-            // double cur_time = pFrame->pts * av_q2d(pCodecCtx->time_base) / 1000;
-            LOG_I("解码%f秒", cur_time);
+    // 为0说明解码完成，非0正在解码
+    if (got_picture) {
+        // 四种获取方式
+        /*double cur_time = packet->pts *
+                          av_q2d(player->input_format_ctx->streams[player->video_stream_index]->time_base);*/
+        // 值相等，AVFrame拷贝自AVPacket的pts
+        /*double cur_time = pFrame->pts *
+                          av_q2d(player->input_format_ctx->streams[player->video_stream_index]->time_base);*/
+        double cur_time = packet->pts * av_q2d(pCodecCtx->time_base) / 1000;
+        // 值相等，AVFrame拷贝自AVPacket的pts
+        // double cur_time = pFrame->pts * av_q2d(pCodecCtx->time_base) / 1000;
+        LOG_I("解码%f秒", cur_time);
 
-            // 2、设置缓冲区的属性（宽、高、像素格式），像素格式要和SurfaceView的像素格式一直
-            ANativeWindow_setBuffersGeometry(player->nativeWindow,
-                                             pCodecCtx->width, pCodecCtx->height,
-                                             WINDOW_FORMAT_RGBA_8888);
+        // 2、设置缓冲区的属性（宽、高、像素格式），像素格式要和SurfaceView的像素格式一直
+        ANativeWindow_setBuffersGeometry(player->nativeWindow,
+                                         pCodecCtx->width, pCodecCtx->height,
+                                         WINDOW_FORMAT_RGBA_8888);
 
-            // 9. 绘制
-            // 3、lock锁定下一个即将要绘制的Surface
-            ANativeWindow_lock(player->nativeWindow, &outBuffer, NULL);
+        // 9. 绘制
+        // 3、lock锁定下一个即将要绘制的Surface
+        ANativeWindow_lock(player->nativeWindow, &outBuffer, NULL);
 
-            // 4、读取帧画面放入缓冲区，指定RGB的AVFrame的像素格式、宽高和缓冲区
-            avpicture_fill((AVPicture *) pRGBFrame,
-                           outBuffer.bits,// 转换RGB的缓冲区，就使用绘制时的缓冲区，即可完成Surface绘制
-                           AV_PIX_FMT_RGBA,// 像素格式
-                           pCodecCtx->width, pCodecCtx->height);
-
-            // 5、将YUV420P->RGBA_8888
-            I420ToARGB(pFrame->data[0], pFrame->linesize[0],// Y
-                       pFrame->data[2], pFrame->linesize[2],// V
-                       pFrame->data[1], pFrame->linesize[1],// U
-                       pRGBFrame->data[0], pRGBFrame->linesize[0],
+        // 4、读取帧画面放入缓冲区，指定RGB的AVFrame的像素格式、宽高和缓冲区
+        avpicture_fill((AVPicture *) pRGBFrame,
+                       outBuffer.bits,// 转换RGB的缓冲区，就使用绘制时的缓冲区，即可完成Surface绘制
+                       AV_PIX_FMT_RGBA,// 像素格式
                        pCodecCtx->width, pCodecCtx->height);
 
-            // 6、unlock绘制
-            ANativeWindow_unlockAndPost(player->nativeWindow);
+        // 5、将YUV420P->RGBA_8888
+        I420ToARGB(pFrame->data[0], pFrame->linesize[0],// Y
+                   pFrame->data[2], pFrame->linesize[2],// V
+                   pFrame->data[1], pFrame->linesize[1],// U
+                   pRGBFrame->data[0], pRGBFrame->linesize[0],
+                   pCodecCtx->width, pCodecCtx->height);
 
-            // FIXME 由于解码需要时间，这样设置播放会偏慢，目前没有解决方式
-            usleep((useconds_t) player->sleep);
+        // 6、unlock绘制
+        ANativeWindow_unlockAndPost(player->nativeWindow);
+
+        // FIXME 由于解码需要时间，这样设置播放会偏慢，目前没有解决方式
+        usleep((useconds_t) player->sleep);
+    }
+    av_frame_free(&pFrame);
+    av_frame_free(&pRGBFrame);
+
+    return 0;
+}
+
+int decode_video2(struct Player *player, AVPacket *packet, AVCodecContext *pCodecCtx,
+                  AVFrame *pFrame, AVFrame *pRGBFrame, struct SwsContext *sws_ctx) {
+
+    int got_picture, ret;
+
+    // 8.解码一帧视频压缩数据，得到视频像素数据，AVPacket->AVFrame
+    ret = avcodec_decode_video2(pCodecCtx, pFrame, &got_picture, packet);
+    if (ret < 0) {
+        LOG_E("解码错误");
+        return -1;
+    }
+
+    // 绘制时的缓冲区
+    ANativeWindow_Buffer outBuffer;
+
+    // 为0说明解码完成，非0正在解码
+    if (got_picture) {
+        // 四种获取方式
+        /*double cur_time = packet->pts *
+                          av_q2d(player->input_format_ctx->streams[player->video_stream_index]->time_base);*/
+        // 值相等，AVFrame拷贝自AVPacket的pts
+        /*double cur_time = pFrame->pts *
+                          av_q2d(player->input_format_ctx->streams[player->video_stream_index]->time_base);*/
+        double cur_time = packet->pts * av_q2d(pCodecCtx->time_base) / 1000;
+        // 值相等，AVFrame拷贝自AVPacket的pts
+        // double cur_time = pFrame->pts * av_q2d(pCodecCtx->time_base) / 1000;
+        LOG_I("解码%f秒", cur_time);
+
+        // 9. 绘制
+        // 3、lock锁定下一个即将要绘制的Surface
+        ANativeWindow_lock(player->nativeWindow, &outBuffer, NULL);
+
+        // 4、格式转换
+        sws_scale(sws_ctx, (uint8_t const *const *) pFrame->data,
+                  pFrame->linesize, 0, pCodecCtx->height,
+                  pRGBFrame->data, pRGBFrame->linesize);
+
+        // 获取stride
+        uint8_t *dst = outBuffer.bits;
+        int dstStride = outBuffer.stride * 4;
+        uint8_t *src = pRGBFrame->data[0];
+        int srcStride = pRGBFrame->linesize[0];
+
+        // 5、由于window的stride和帧的stride不同，因此需要逐行复制
+        int h;
+        for (h = 0; h < pCodecCtx->height; h++) {
+            memcpy(dst + h * dstStride, src + h * srcStride, (size_t) srcStride);
         }
-        av_frame_free(&pFrame);
-        av_frame_free(&pRGBFrame);
+
+        // 6、unlock绘制
+        ANativeWindow_unlockAndPost(player->nativeWindow);
+
+        // FIXME 由于解码需要时间，这样设置播放会偏慢，目前没有解决方式
+        usleep((useconds_t) player->sleep);
     }
 
     return 0;
 }
 
 /**
- * 解码，子线程函数
+ * 解码音视频，子线程函数
  */
 void *decode_data(void *arg) {
 
@@ -415,13 +319,114 @@ void *decode_data(void *arg) {
     // 7.一帧一帧的读取压缩视频数据AVPacket
     while (av_read_frame(pFormatCtx, packet) >= 0 && flag) {
         if (packet->stream_index == player->video_stream_index) {
-            // TODO
+            // 只要视频压缩数据（根据流的索引位置判断）
             LOG_I("解码%d帧", ++frame_count);
             decode_video(player, packet);
         }
         // 释放资源
         av_packet_unref(packet);// av_packet_unref代替过时的av_free_packet
     }
+
+    // 关闭解码器
+    //avcodec_close(pCodecCtx);
+
+    return NULL;
+}
+
+
+void *decode_data2(void *arg) {
+
+    // 每个线程都有独立的JNIEnv
+    JNIEnv *env;
+    // 通过JavaVM关联当前线程，获取当前线程的JNIEnv
+    (*javaVM)->AttachCurrentThread(javaVM, &env, NULL);
+
+    struct Player *player = (struct Player *) arg;
+    AVFormatContext *pFormatCtx = player->input_format_ctx;
+    AVCodecContext *pCodecCtx = player->input_codec_ctx[player->video_stream_index];
+
+    // AVFrame，像素数据（解码数据），用于存储解码后的像素数据(YUV)
+    // 内存分配
+    AVFrame *pFrame = av_frame_alloc();// 实际就是YUV420P
+    AVFrame *pRGBFrame = av_frame_alloc();// RGB，用于渲染
+
+    if (pRGBFrame == NULL || pFrame == NULL) {
+        LOG_E("Could not allocate video frame");
+        goto end;
+    }
+
+    // 2、设置缓冲区的属性（宽、高、像素格式），像素格式要和SurfaceView的像素格式一直
+    ANativeWindow_setBuffersGeometry(player->nativeWindow,
+                                     pCodecCtx->width, pCodecCtx->height,
+                                     WINDOW_FORMAT_RGBA_8888);
+
+    // av_image_get_buffer_size代替过时的avpicture_get_size
+    int numBytes = av_image_get_buffer_size(AV_PIX_FMT_RGBA, pCodecCtx->width,
+                                            pCodecCtx->height, 1);
+    // 缓冲区分配内存
+    uint8_t *buffer = av_malloc(numBytes * sizeof(uint8_t));
+
+    // 初始化缓冲区，av_image_fill_arrays替代过时的avpicture_fill
+    av_image_fill_arrays(pRGBFrame->data, pRGBFrame->linesize, buffer, AV_PIX_FMT_RGBA,
+                         pCodecCtx->width, pCodecCtx->height, 1);
+
+    // 由于解码出来的帧格式不是RGBA的，在渲染之前需要进行格式转换
+    struct SwsContext *sws_ctx = sws_getContext(pCodecCtx->width, pCodecCtx->height,// 原始画面宽高
+                                                pCodecCtx->pix_fmt,// 原始画面像素格式
+                                                pCodecCtx->width, pCodecCtx->height,// 目标画面宽高
+                                                AV_PIX_FMT_RGBA,// 目标画面像素格式
+                                                SWS_BILINEAR,// 算法
+                                                NULL, NULL, NULL);
+
+    int frame_count = 0;
+
+    flag = 1;
+
+    // 准备读取
+    // AVPacket，编码数据，用于存储一帧一帧的压缩数据（H264）
+    // 缓冲区，开辟空间
+    AVPacket *packet = av_malloc(sizeof(AVPacket));
+
+    // 7.一帧一帧的读取压缩视频数据AVPacket
+    while (av_read_frame(pFormatCtx, packet) >= 0 && flag) {
+        if (packet->stream_index == player->video_stream_index) {
+            // 只要视频压缩数据（根据流的索引位置判断）
+            LOG_I("解码%d帧", ++frame_count);
+            decode_video2(player, packet, pCodecCtx, pFrame, pRGBFrame, sws_ctx);
+        }
+        // 释放资源
+        av_packet_unref(packet);// av_packet_unref代替过时的av_free_packet
+    }
+
+    // 释放SwsContext
+    sws_freeContext(sws_ctx);
+
+    // 释放缓冲区
+    av_free(buffer);
+
+    end:
+    // 7、释放资源
+    ANativeWindow_release(player->nativeWindow);
+
+    // 释放AVFrame
+    av_frame_free(&pFrame);
+    av_frame_free(&pRGBFrame);
+
+    // 关闭解码器
+    avcodec_close(pCodecCtx);
+
+    // 释放AVFormatContext
+    avformat_close_input(&pFormatCtx);
+
+    // 调用MyPlayer.onCompletion()
+    (*env)->CallVoidMethod(env, player_global,// jobject
+                           player_completion_mid,// onCompletion()
+                           0);// onCompletion的参数
+
+    // 取消关联
+    (*javaVM)->DetachCurrentThread(javaVM);
+
+    return NULL;
 }
 
 /**
@@ -459,11 +464,26 @@ void decode_video_prepare(JNIEnv *env, struct Player *player,
 }
 
 JNIEXPORT void JNICALL
-Java_com_jamff_ffmpeg_MyPlayer_play(JNIEnv *env, jobject instance, jstring input_,
-                                    jobject surface) {
-    LOG_I("play");
+Java_com_jamff_ffmpeg_MyPlayer_init(JNIEnv *env, jobject instance) {
 
-    const char *input_cstr = (*env)->GetStringUTFChars(env, input_, 0);
+    // 创建全局引用
+    player_global = (*env)->NewGlobalRef(env, instance);
+
+    // 获取MyPlayer的jclass，获取class必须要在主线程
+    jclass player_class = (*env)->GetObjectClass(env, player_global);
+
+    // 得到MyPlayer.onCompletion()
+    player_completion_mid = (*env)->GetMethodID(env, player_class,// jclass
+                                                "onCompletion",// 方法名
+                                                "(I)V");// 字段签名
+}
+
+JNIEXPORT void JNICALL
+Java_com_jamff_ffmpeg_MyPlayer_render(JNIEnv *env, jobject instance, jstring input_jstr,
+                                      jobject surface) {
+    LOG_I("render");
+
+    const char *input_cstr = (*env)->GetStringUTFChars(env, input_jstr, 0);
 
     struct Player *player = (struct Player *) malloc(sizeof(struct Player));
 
@@ -493,6 +513,48 @@ Java_com_jamff_ffmpeg_MyPlayer_play(JNIEnv *env, jobject instance, jstring input
 }
 
 JNIEXPORT void JNICALL
+Java_com_jamff_ffmpeg_MyPlayer_play(JNIEnv *env, jobject instance, jstring input_,
+                                    jobject surface) {
+    LOG_I("play");
+
+    const char *input_cstr = (*env)->GetStringUTFChars(env, input_, 0);
+
+    struct Player *player = (struct Player *) malloc(sizeof(struct Player));
+
+    // 初始化封装格式上下文
+    if (init_input_format_ctx(player, input_cstr) < 0) {
+        return;
+    }
+
+    int video_stream_index = player->video_stream_index;
+    int audio_stream_index = player->audio_stream_index;
+
+    // 获取视频解码器并打开
+    if (init_codec_context(player, video_stream_index) < 0) {
+        return;
+    }
+    // 获取音频解码器并打开
+    if (init_codec_context(player, audio_stream_index) < 0) {
+        return;
+    }
+
+    // 解码视频准备工作
+    decode_video_prepare(env, player, surface, video_stream_index);
+
+    // 创建子线程，解码视频
+    pthread_create(&(player->decode_threads[video_stream_index]), NULL, decode_data2,
+                   (void *) player);
+
+    (*env)->ReleaseStringUTFChars(env, input_, input_cstr);
+}
+
+JNIEXPORT void JNICALL
 Java_com_jamff_ffmpeg_MyPlayer_stop(JNIEnv *env, jobject instance) {
     flag = 0;
+}
+
+JNIEXPORT void JNICALL
+Java_com_jamff_ffmpeg_MyPlayer_destroy(JNIEnv *env, jobject instance) {
+    // 释放全局引用，主线程创建的全局引用，必须在主线程释放，子线程释放报错
+    (*env)->DeleteGlobalRef(env, player_global);
 }

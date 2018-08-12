@@ -20,7 +20,8 @@ import com.jamff.ffmpeg.widget.VideoView;
 
 import java.io.File;
 
-public class MainActivity extends AppCompatActivity implements View.OnClickListener, SurfaceHolder.Callback {
+public class MainActivity extends AppCompatActivity implements View.OnClickListener,
+        SurfaceHolder.Callback, MyPlayer.OnCompletionListener {
 
     private static final String TAG = "JamFF";
 
@@ -62,6 +63,7 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         checkPermission();
         checkVideoFile();
         mPlayer = new MyPlayer();
+        mPlayer.setOnCompletionListener(this);
     }
 
     private void initEvent() {
@@ -92,10 +94,10 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
     public void onClick(View v) {
         switch (v.getId()) {
             case R.id.bt_play_video_1:
-                renderVideo();
+                playVideo(true);
                 break;
             case R.id.bt_play_video_2:
-                playVideo();
+                playVideo(false);
                 break;
             case R.id.bt_stop:
                 mPlayer.stop();
@@ -124,9 +126,12 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
     }
 
     /**
-     * Java IO线程视频播放
+     * 播放媒体文件
+     *
+     * @param is_libyuv true 使用libyuv将YUV转换为RGB
+     *                  false 使用ffmpeg自带的swscale.h中的sws_scale将解码数据转换为RGB
      */
-    private void renderVideo() {
+    private void playVideo(boolean is_libyuv) {
 
         if (!checkVideoFile()) {
             return;
@@ -142,38 +147,18 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
             return;
         }
 
-        new Thread(new Runnable() {
-            @Override
-            public void run() {
-                // 阻塞
-                complete(mPlayer.render(videoFile.getAbsolutePath(), mSurface));
-            }
-        }).start();
+        // 子线程播放，播放完成后回调onCompletion
+        if (is_libyuv) {
+            mPlayer.render(videoFile.getAbsolutePath(), mSurface);
+        } else {
+            mPlayer.play(videoFile.getAbsolutePath(), mSurface);
+        }
     }
 
-    /**
-     * C IO线程视频播放
-     */
-    private void playVideo() {
-
-        if (!checkVideoFile()) {
-            return;
-        }
-
-        bt_play_video_1.setEnabled(false);
-        bt_play_video_2.setEnabled(false);
-        bt_play_music_video.setEnabled(false);
-        bt_stop.setEnabled(true);
-
-        if (mSurface == null) {
-            Log.e(TAG, "start: mSurface == null");
-            return;
-        }
-
-        // TODO 子线程播放，可以增加JNI方法，播放完成后通知Android，处理后续逻辑
-        mPlayer.play(videoFile.getAbsolutePath(), mSurface);
+    @Override
+    public void onCompletion(int result) {
+        complete(result);
     }
-
 
     /**
      * 视频播放结束后，SurfaceView清空画布
@@ -252,7 +237,14 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
 
     @Override
     public void onBackPressed() {
+        mPlayer.setOnCompletionListener(null);
         mPlayer.stop();
         super.onBackPressed();
+    }
+
+    @Override
+    protected void onDestroy() {
+        mPlayer.destroy();
+        super.onDestroy();
     }
 }

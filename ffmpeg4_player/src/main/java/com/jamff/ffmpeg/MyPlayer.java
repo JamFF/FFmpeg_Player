@@ -3,7 +3,6 @@ package com.jamff.ffmpeg;
 import android.media.AudioFormat;
 import android.media.AudioManager;
 import android.media.AudioTrack;
-import android.view.Surface;
 
 /**
  * 描述：
@@ -12,11 +11,30 @@ import android.view.Surface;
  */
 public class MyPlayer {
 
+    interface OnCompletionListener {
+        void onCompletion(int result);
+    }
+
+    public MyPlayer() {
+        init();
+    }
+
+    private OnCompletionListener mOnCompletionListener;
+
+    public void setOnCompletionListener(OnCompletionListener onCompletionListener) {
+        mOnCompletionListener = onCompletionListener;
+    }
+
+    private AudioTrack mAudioTrack;
+
     public AudioTrack getAudioTrack() {
         return mAudioTrack;
     }
 
-    private AudioTrack mAudioTrack;
+    /**
+     * 初始化播放器
+     */
+    public native void init();
 
     /**
      * 使用libyuv将YUV转换为RGB，进行播放
@@ -24,9 +42,8 @@ public class MyPlayer {
      *
      * @param input   输入视频路径
      * @param surface {@link android.view.Surface}
-     * @return 0成功，-1失败
      */
-    public native int render(String input, Surface surface);
+    public native void render(String input, Object surface);
 
     /**
      * 使用ffmpeg自带的swscale.h中的sws_scale将解码数据转换为RGB，进行播放
@@ -34,9 +51,18 @@ public class MyPlayer {
      *
      * @param input   输入视频路径
      * @param surface {@link android.view.Surface}
-     * @return 0成功，-1失败
      */
-    public native void play(String input, Surface surface);
+    public native void play(String input, Object surface);
+
+    /**
+     * 停止播放
+     */
+    public native void stop();
+
+    /**
+     * 释放播放器资源
+     */
+    public native void destroy();
 
     /**
      * 创建AudioTrack，提供给C调用
@@ -45,7 +71,7 @@ public class MyPlayer {
      * @param nb_channels    声道数
      * @return {@link android.media.AudioTrack}
      */
-    private AudioTrack createAudioTrack(int sampleRateInHz, int nb_channels) {
+    public AudioTrack createAudioTrack(int sampleRateInHz, int nb_channels) {
 
         // 固定的音频数据格式，16位PCM
         int audioFormat = AudioFormat.ENCODING_PCM_16BIT;
@@ -76,9 +102,15 @@ public class MyPlayer {
     }
 
     /**
-     * 停止播放
+     * 播放完成，或者手动停止，提供给C调用
+     *
+     * @param result 0成功，-1失败
      */
-    public native void stop();
+    public void onCompletion(int result) {
+        if (mOnCompletionListener != null) {
+            mOnCompletionListener.onCompletion(result);
+        }
+    }
 
     static {
         System.loadLibrary("player");
