@@ -206,7 +206,6 @@ Java_com_jamff_ffmpeg_MyPlayer_render(JNIEnv *env, jobject instance, jstring inp
     return 0;
 }
 
-
 struct Player {
     // 封装格式上下文
     AVFormatContext *input_format_ctx;
@@ -225,15 +224,12 @@ struct Player {
 
 /**
  * 初始化封装格式上下文，获取音频视频流的索引位置
- * @param player
- * @param input_cstr
- * @return
  */
 int init_input_format_ctx(struct Player *player, const char *input_cstr) {
 
     // 1.注册所有组件
     av_register_all();
-    // TODO player->input_format_ctx没赋值
+
     // 封装格式上下文，统领全局的结构体，保存了视频文件封装格式的相关信息
     AVFormatContext *format_ctx = avformat_alloc_context();
 
@@ -278,6 +274,7 @@ int init_input_format_ctx(struct Player *player, const char *input_cstr) {
     } else {
         LOG_I("video_stream_index = %d, audio_stream_index = %d", video_stream_idx,
               video_stream_idx);
+        // 存储到结构体中，方便后续使用
         player->video_stream_index = video_stream_idx;
         player->audio_stream_index = audio_stream_idx;
         player->input_format_ctx = format_ctx;
@@ -288,9 +285,6 @@ int init_input_format_ctx(struct Player *player, const char *input_cstr) {
 
 /**
  * 初始化解码器上下文
- * @param player
- * @param stream_index
- * @return
  */
 int init_codec_context(struct Player *player, int stream_index) {
 
@@ -317,16 +311,17 @@ int init_codec_context(struct Player *player, int stream_index) {
         LOG_E("Could not open codec");
         return -1;
     }
-    // TODO 不理解，一般情况视频是0，音频是1
+    if (stream_index > MAX_STREAM - 1) {
+        LOG_E("stream_index > MAX_STREAM - 1");
+        return -1;
+    }
+    // 一般情况视频是0，音频是1
     player->input_codec_ctx[stream_index] = codec_ctx;
     return 0;
 }
 
 /**
  * 解码视频
- * @param player
- * @param packet
- * @return
  */
 int decode_video(struct Player *player, AVPacket *packet) {
 
@@ -401,9 +396,7 @@ int decode_video(struct Player *player, AVPacket *packet) {
 }
 
 /**
- * 解码子线程函数
- * @param arg
- * @return
+ * 解码，子线程函数
  */
 void *decode_data(void *arg) {
 
@@ -432,12 +425,35 @@ void *decode_data(void *arg) {
 }
 
 /**
- * 创建NativeWindow
- * @param env
- * @param player
- * @param surface
+ * 解码视频准备工作
  */
-void decode_video_prepare(JNIEnv *env, struct Player *player, jobject surface) {
+void decode_video_prepare(JNIEnv *env, struct Player *player,
+                          jobject surface, int video_stream_index) {
+
+    /***********************************打印信息 start***********************************/
+    AVCodecContext *pCodecCtx = player->input_codec_ctx[video_stream_index];
+
+    // 获取视频宽高
+    int videoWidth = pCodecCtx->width;
+    int videoHeight = pCodecCtx->height;
+
+    // 封装格式上下文，统领全局的结构体，保存了视频文件封装格式的相关信息
+    AVFormatContext *pFormatCtx = player->input_format_ctx;
+
+    // 输出视频信息
+    LOG_I("多媒体格式：%s", pFormatCtx->iformat->name);
+    // 视频AVStream
+    AVStream *stream = pFormatCtx->streams[video_stream_index];
+    LOG_I("时长：%f, %f", (pFormatCtx->duration) / 1000000.0,
+          stream->duration * av_q2d(stream->time_base));
+    LOG_I("视频的宽高：%d, %d", videoWidth, videoHeight);
+    // 视频帧率，每秒多少帧
+    double frame_rate = av_q2d(stream->avg_frame_rate);
+    LOG_I("帧率 = %f", frame_rate);
+    /***********************************打印信息 end***********************************/
+
+    // 计算每帧的间隔，单位是微秒
+    player->sleep = (int) (1000 * 1000 / frame_rate);
     // 1、获取一个关联Surface的NativeWindow窗体
     player->nativeWindow = ANativeWindow_fromSurface(env, surface);
 }
@@ -458,6 +474,7 @@ Java_com_jamff_ffmpeg_MyPlayer_play(JNIEnv *env, jobject instance, jstring input
 
     int video_stream_index = player->video_stream_index;
     int audio_stream_index = player->audio_stream_index;
+
     // 获取视频解码器并打开
     if (init_codec_context(player, video_stream_index) < 0) {
         return;
@@ -467,29 +484,10 @@ Java_com_jamff_ffmpeg_MyPlayer_play(JNIEnv *env, jobject instance, jstring input
         return;
     }
 
-    // 视频AVCodecContext
-    AVCodecContext *pCodecCtx = player->input_codec_ctx[video_stream_index];
-    // 获取视频宽高
-    int videoWidth = pCodecCtx->width;
-    int videoHeight = pCodecCtx->height;
+    // 解码视频准备工作
+    decode_video_prepare(env, player, surface, video_stream_index);
 
-    // 输出视频信息
-    LOG_I("多媒体格式：%s", player->input_format_ctx->iformat->name);
-    // 视频AVStream
-    AVStream *stream = player->input_format_ctx->streams[video_stream_index];
-    LOG_I("时长：%f, %f", (player->input_format_ctx->duration) / 1000000.0,
-          stream->duration * av_q2d(stream->time_base));
-    LOG_I("视频的宽高：%d, %d", videoWidth, videoHeight);
-    // 视频帧率，每秒多少帧
-    double frame_rate = av_q2d(stream->avg_frame_rate);
-    LOG_I("帧率 = %f", frame_rate);
-
-    // 间隔是微秒
-    player->sleep = (int) (1000 * 1000 / frame_rate);
-
-    decode_video_prepare(env, player, surface);
-
-    // 创建子线程解码
+    // 创建子线程，解码视频
     pthread_create(&(player->decode_threads[video_stream_index]), NULL, decode_data,
                    (void *) player);
 }

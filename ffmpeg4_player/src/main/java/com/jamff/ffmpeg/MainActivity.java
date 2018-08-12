@@ -92,10 +92,10 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
     public void onClick(View v) {
         switch (v.getId()) {
             case R.id.bt_play_video_1:
-                playVideo();
+                renderVideo();
                 break;
             case R.id.bt_play_video_2:
-                renderVideo();
+                playVideo();
                 break;
             case R.id.bt_stop:
                 mPlayer.stop();
@@ -126,7 +126,7 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
     /**
      * Java IO线程视频播放
      */
-    private void playVideo() {
+    private void renderVideo() {
 
         if (!checkVideoFile()) {
             return;
@@ -154,7 +154,7 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
     /**
      * C IO线程视频播放
      */
-    private void renderVideo() {
+    private void playVideo() {
 
         if (!checkVideoFile()) {
             return;
@@ -170,8 +170,8 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
             return;
         }
 
+        // TODO 子线程播放，可以增加JNI方法，播放完成后通知Android，处理后续逻辑
         mPlayer.play(videoFile.getAbsolutePath(), mSurface);
-        // TODO 需要回调处理
     }
 
 
