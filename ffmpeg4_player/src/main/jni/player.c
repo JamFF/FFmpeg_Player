@@ -167,24 +167,10 @@ int init_codec_context(struct Player *player, int stream_index) {
 /**
  * 解码视频
  */
-int decode_video(struct Player *player, AVPacket *packet) {
+int decode_video(struct Player *player, AVPacket *packet, AVCodecContext *pCodecCtx,
+                 AVFrame *pFrame, AVFrame *pRGBFrame) {
 
     int got_picture, ret;
-
-    // AVFrame，像素数据（解码数据），用于存储解码后的像素数据(YUV)
-    // 内存分配
-    AVFrame *pFrame = av_frame_alloc();// 实际就是YUV420P
-    AVFrame *pRGBFrame = av_frame_alloc();// RGB，用于渲染
-
-    if (pRGBFrame == NULL || pFrame == NULL) {
-        LOG_E("Could not allocate video frame");
-        return -1;
-    }
-
-    // 绘制时的缓冲区
-    ANativeWindow_Buffer outBuffer;
-
-    AVCodecContext *pCodecCtx = player->input_codec_ctx[player->video_stream_index];
 
     // 8.解码一帧视频压缩数据，得到视频像素数据，AVPacket->AVFrame
     ret = avcodec_decode_video2(pCodecCtx, pFrame, &got_picture, packet);
@@ -192,6 +178,9 @@ int decode_video(struct Player *player, AVPacket *packet) {
         LOG_E("解码错误");
         return -1;
     }
+
+    // 绘制时的缓冲区
+    ANativeWindow_Buffer outBuffer;
 
     // 为0说明解码完成，非0正在解码
     if (got_picture) {
@@ -205,11 +194,6 @@ int decode_video(struct Player *player, AVPacket *packet) {
         // 值相等，AVFrame拷贝自AVPacket的pts
         // double cur_time = pFrame->pts * av_q2d(pCodecCtx->time_base) / 1000;
         LOG_I("解码%f秒", cur_time);
-
-        // 2、设置缓冲区的属性（宽、高、像素格式），像素格式要和SurfaceView的像素格式一直
-        ANativeWindow_setBuffersGeometry(player->nativeWindow,
-                                         pCodecCtx->width, pCodecCtx->height,
-                                         WINDOW_FORMAT_RGBA_8888);
 
         // 9. 绘制
         // 3、lock锁定下一个即将要绘制的Surface
@@ -234,8 +218,6 @@ int decode_video(struct Player *player, AVPacket *packet) {
         // FIXME 由于解码需要时间，这样设置播放会偏慢，目前没有解决方式
         usleep((useconds_t) player->sleep);
     }
-    av_frame_free(&pFrame);
-    av_frame_free(&pRGBFrame);
 
     return 0;
 }
@@ -304,36 +286,78 @@ int decode_video2(struct Player *player, AVPacket *packet, AVCodecContext *pCode
  */
 void *decode_data(void *arg) {
 
+    // 每个线程都有独立的JNIEnv
+    JNIEnv *env;
+    // 通过JavaVM关联当前线程，获取当前线程的JNIEnv
+    (*javaVM)->AttachCurrentThread(javaVM, &env, NULL);
+
     struct Player *player = (struct Player *) arg;
     AVFormatContext *pFormatCtx = player->input_format_ctx;
+    AVCodecContext *pCodecCtx = player->input_codec_ctx[player->video_stream_index];
+
+    // AVFrame，像素数据（解码数据），用于存储解码后的像素数据(YUV)
+    // 内存分配
+    AVFrame *pFrame = av_frame_alloc();// 实际就是YUV420P
+    AVFrame *pRGBFrame = av_frame_alloc();// RGB，用于渲染
+
+    if (pRGBFrame == NULL || pFrame == NULL) {
+        LOG_E("Could not allocate video frame");
+        goto end;
+    }
+
+    // 2、设置缓冲区的属性（宽、高、像素格式），像素格式要和SurfaceView的像素格式一直
+    ANativeWindow_setBuffersGeometry(player->nativeWindow,
+                                     pCodecCtx->width, pCodecCtx->height,
+                                     WINDOW_FORMAT_RGBA_8888);
+
+    int frame_count = 0;
+
+    flag = 1;
 
     // 准备读取
     // AVPacket，编码数据，用于存储一帧一帧的压缩数据（H264）
     // 缓冲区，开辟空间
     AVPacket *packet = av_malloc(sizeof(AVPacket));
 
-    int frame_count = 0;
-
-    flag = 1;
-
     // 7.一帧一帧的读取压缩视频数据AVPacket
     while (av_read_frame(pFormatCtx, packet) >= 0 && flag) {
         if (packet->stream_index == player->video_stream_index) {
             // 只要视频压缩数据（根据流的索引位置判断）
             LOG_I("解码%d帧", ++frame_count);
-            decode_video(player, packet);
+            decode_video(player, packet, pCodecCtx, pFrame, pRGBFrame);
         }
         // 释放资源
         av_packet_unref(packet);// av_packet_unref代替过时的av_free_packet
     }
 
+    end:
+    // 7、释放资源
+    ANativeWindow_release(player->nativeWindow);
+
+    // 释放AVFrame
+    av_frame_free(&pFrame);
+    av_frame_free(&pRGBFrame);
+
     // 关闭解码器
-    //avcodec_close(pCodecCtx);
+    avcodec_close(pCodecCtx);
+
+    // 释放AVFormatContext
+    avformat_close_input(&pFormatCtx);
+
+    // 调用MyPlayer.onCompletion()
+    (*env)->CallVoidMethod(env, player_global,// jobject
+                           player_completion_mid,// onCompletion()
+                           0);// onCompletion的参数
+
+    // 取消关联
+    (*javaVM)->DetachCurrentThread(javaVM);
 
     return NULL;
 }
 
-
+/**
+ *  解码音视频，子线程函数
+ */
 void *decode_data2(void *arg) {
 
     // 每个线程都有独立的JNIEnv
