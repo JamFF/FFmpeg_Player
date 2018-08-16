@@ -222,6 +222,9 @@ int decode_video(struct Player *player, AVPacket *packet, AVCodecContext *pCodec
     return 0;
 }
 
+/**
+ * 解码视频
+ */
 int decode_video2(struct Player *player, AVPacket *packet, AVCodecContext *pCodecCtx,
                   AVFrame *pFrame, AVFrame *pRGBFrame, struct SwsContext *sws_ctx) {
 
@@ -282,6 +285,15 @@ int decode_video2(struct Player *player, AVPacket *packet, AVCodecContext *pCode
 }
 
 /**
+ * 解码音频
+ */
+int decode_audio(struct Player *player, AVPacket *packet,
+                 AVCodecContext *pCodecCtx, AVFrame *pFrame) {
+
+    return 0;
+}
+
+/**
  * 解码音视频，子线程函数
  */
 void *decode_data(void *arg) {
@@ -325,6 +337,8 @@ void *decode_data(void *arg) {
             // 只要视频压缩数据（根据流的索引位置判断）
             LOG_I("解码%d帧", ++frame_count);
             decode_video(player, packet, pCodecCtx, pFrame, pRGBFrame);
+        } else if (packet->stream_index == player->audio_stream_index) {
+            decode_audio(player, packet, pCodecCtx, pFrame);
         }
         // 释放资源
         av_packet_unref(packet);// av_packet_unref代替过时的av_free_packet
