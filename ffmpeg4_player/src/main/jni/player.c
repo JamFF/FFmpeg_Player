@@ -18,6 +18,9 @@
 // 编解码，使用av_image...代替libavcodec/avcodec.h中过时的avpicture...
 #include <libavutil/imgutils.h>
 
+// 重采样
+#include <libswresample/swresample.h>
+
 // 使用libyuv，将YUV转换RGB
 #include <libyuv.h>
 
@@ -501,6 +504,71 @@ void decode_video_prepare(JNIEnv *env, struct Player *player,
     player->nativeWindow = ANativeWindow_fromSurface(env, surface);
 }
 
+/**
+ * 解码音频准备工作
+ */
+void decode_audio_prepare(JNIEnv *env, struct Player *player,
+                          int video_stream_index) {
+
+    /***********************************打印信息 start***********************************/
+    AVCodecContext *pCodecCtx = player->input_codec_ctx[video_stream_index];
+
+    // 获取视频宽高
+    int videoWidth = pCodecCtx->width;
+    int videoHeight = pCodecCtx->height;
+
+    // 封装格式上下文，统领全局的结构体，保存了视频文件封装格式的相关信息
+    AVFormatContext *pFormatCtx = player->input_format_ctx;
+
+    // 输出视频信息
+    LOG_I("多媒体格式：%s", pFormatCtx->iformat->name);
+    // 视频AVStream
+    AVStream *stream = pFormatCtx->streams[video_stream_index];
+    LOG_I("时长：%f, %f", (pFormatCtx->duration) / 1000000.0,
+          stream->duration * av_q2d(stream->time_base));
+    LOG_I("视频的宽高：%d, %d", videoWidth, videoHeight);
+    // 视频帧率，每秒多少帧
+    double frame_rate = av_q2d(stream->avg_frame_rate);
+    LOG_I("帧率 = %f", frame_rate);
+    /***********************************打印信息 end***********************************/
+
+    // 创建重采样上下文
+    SwrContext *swrCtx = swr_alloc();
+    if (swrCtx == NULL) {
+        LOG_E("分配SwrContext失败");
+    }
+
+    // 重采样设置参数-------------start
+
+    // 输出的声道布局（立体声）
+    uint64_t out_ch_layout = AV_CH_LAYOUT_STEREO;
+
+    // 输出采样格式，16bit
+    enum AVSampleFormat out_sample_fmt = AV_SAMPLE_FMT_S16;
+
+    // 输出采样率，44100Hz，在一秒钟内对声音信号采样44100次
+    int out_sample_rate = 44100;
+
+    // 输入的声道布局
+    uint64_t in_ch_layout = pCodecCtx->channel_layout;
+    // 另一种方式根据声道个数获取默认的声道布局（2个声道，默认立体声stereo）
+    // int64_t in_ch_layout = av_get_default_channel_layout(pCodecCtx->channels);
+
+    // 输入的采样格式
+    enum AVSampleFormat in_sample_fmt = pCodecCtx->sample_fmt;
+
+    // 输入采样率
+    int in_sample_rate = pCodecCtx->sample_rate;
+
+    // 根据需要分配SwrContext并设置或重置公共参数
+    swr_alloc_set_opts(swrCtx,
+                       out_ch_layout, out_sample_fmt, out_sample_rate,
+                       in_ch_layout, in_sample_fmt, in_sample_rate,
+                       0, NULL);// 最后两个是日志相关参数
+
+    // 重采样设置参数-------------end
+}
+
 JNIEXPORT void JNICALL
 Java_com_jamff_ffmpeg_MyPlayer_init(JNIEnv *env, jobject instance) {
 
@@ -578,6 +646,9 @@ Java_com_jamff_ffmpeg_MyPlayer_play(JNIEnv *env, jobject instance, jstring input
 
     // 解码视频准备工作
     decode_video_prepare(env, player, surface, video_stream_index);
+
+    // 解码音频准备工作
+    decode_audio_prepare(env, player, video_stream_index);
 
     // 创建子线程，解码视频
     pthread_create(&(player->decode_threads[video_stream_index]), NULL, decode_data2,
