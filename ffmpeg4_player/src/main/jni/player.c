@@ -368,6 +368,7 @@ int decode_audio(JNIEnv *env, struct Player *player, AVPacket *packet,
     // 8.解码一帧音频压缩数据，得到音频PCM数据，AVPacket->AVFrame
     ret = avcodec_send_packet(pCodecCtx, packet);
     if (ret < 0) {
+        // TODO 报错
         LOG_E("发送数据包到解码器时出错 %d", ret);
         return -1;
     }
