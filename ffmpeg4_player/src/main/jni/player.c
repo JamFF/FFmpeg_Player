@@ -140,7 +140,7 @@ int init_input_format_ctx(struct Player *player, const char *input_cstr) {
         return -1;
     } else {
         LOG_I("video_stream_index = %d, audio_stream_index = %d", video_stream_idx,
-              video_stream_idx);
+              audio_stream_idx);
         // 存储到结构体中，方便后续使用
         player->video_stream_index = video_stream_idx;
         player->audio_stream_index = audio_stream_idx;
@@ -182,7 +182,7 @@ int init_codec_context(struct Player *player, int stream_index) {
         LOG_E("stream_index > MAX_STREAM - 1");
         return -1;
     }
-    // 一般情况视频是0，音频是1
+    // 一般情况音频是0，视频是1
     player->input_codec_ctx[stream_index] = codec_ctx;
     return 0;
 }
@@ -368,7 +368,6 @@ int decode_audio(JNIEnv *env, struct Player *player, AVPacket *packet,
     // 8.解码一帧音频压缩数据，得到音频PCM数据，AVPacket->AVFrame
     ret = avcodec_send_packet(pCodecCtx, packet);
     if (ret < 0) {
-        // TODO 报错
         LOG_E("发送数据包到解码器时出错 %d", ret);
         return -1;
     }
@@ -384,8 +383,9 @@ int decode_audio(JNIEnv *env, struct Player *player, AVPacket *packet,
                 break;
             case 0:// 成功，返回一个输出帧
 
-                //LOG_I("解码：%d", ++frame_count);
+                // LOG_I("解码：%d", ++frame_count);
                 // 9.转换音频
+                // TODO 报错
                 ret = swr_convert(player->swrCtx,// 重采样上下文
                                   &out_buffer,// 输出缓冲区
                                   MAX_AUDIO_FRAME_SIZE,// 每通道采样的可用空间量
@@ -457,7 +457,8 @@ void *decode_data(void *arg) {
 
     struct Player *player = (struct Player *) arg;
     AVFormatContext *pFormatCtx = player->input_format_ctx;
-    AVCodecContext *pCodecCtx = player->input_codec_ctx[player->video_stream_index];
+    AVCodecContext *pCodecCtx_video = player->input_codec_ctx[player->video_stream_index];
+    AVCodecContext *pCodecCtx_audio = player->input_codec_ctx[player->audio_stream_index];
 
     // AVFrame，像素数据（解码数据），用于存储解码后的像素数据(YUV)
     // 内存分配
@@ -471,10 +472,11 @@ void *decode_data(void *arg) {
 
     // 2、设置缓冲区的属性（宽、高、像素格式），像素格式要和SurfaceView的像素格式一直
     ANativeWindow_setBuffersGeometry(player->nativeWindow,
-                                     pCodecCtx->width, pCodecCtx->height,
+                                     pCodecCtx_video->width, pCodecCtx_video->height,
                                      WINDOW_FORMAT_RGBA_8888);
 
-    int frame_count = 0;
+    int frame_count_video = 0;
+    int frame_count_audio = 0;
 
     flag = 1;
 
@@ -482,15 +484,21 @@ void *decode_data(void *arg) {
     // AVPacket，编码数据，用于存储一帧一帧的压缩数据（H264）
     // 缓冲区，开辟空间
     AVPacket *packet = av_malloc(sizeof(AVPacket));
+    if (packet == NULL) {
+        LOG_E("分配AVPacket内存失败");
+        return NULL;
+    }
 
     // 7.一帧一帧的读取压缩视频数据AVPacket
     while (av_read_frame(pFormatCtx, packet) >= 0 && flag) {
         if (packet->stream_index == player->video_stream_index) {
-            // 只要视频压缩数据（根据流的索引位置判断）
-            LOG_I("解码%d帧", ++frame_count);
-            decode_video(player, packet, pCodecCtx, pFrame, pRGBFrame);
+            // 视频压缩数据（根据流的索引位置判断）
+            /*LOG_I("解码视频%d帧", ++frame_count_video);
+            decode_video(player, packet, pCodecCtx_video, pFrame, pRGBFrame);*/
         } else if (packet->stream_index == player->audio_stream_index) {
-            decode_audio(env, player, packet, pCodecCtx, pFrame);
+            // 音频压缩数据（根据流的索引位置判断）
+            LOG_I("解码视频%d帧", ++frame_count_audio);
+            decode_audio(env, player, packet, pCodecCtx_audio, pFrame);
         }
         // 释放资源
         av_packet_unref(packet);// av_packet_unref代替过时的av_free_packet
@@ -505,7 +513,8 @@ void *decode_data(void *arg) {
     av_frame_free(&pRGBFrame);
 
     // 关闭解码器
-    avcodec_close(pCodecCtx);
+    avcodec_close(pCodecCtx_video);
+    avcodec_close(pCodecCtx_audio);
 
     // 释放AVFormatContext
     avformat_close_input(&pFormatCtx);
@@ -533,7 +542,8 @@ void *decode_data2(void *arg) {
 
     struct Player *player = (struct Player *) arg;
     AVFormatContext *pFormatCtx = player->input_format_ctx;
-    AVCodecContext *pCodecCtx = player->input_codec_ctx[player->video_stream_index];
+    AVCodecContext *pCodecCtx_video = player->input_codec_ctx[player->video_stream_index];
+    AVCodecContext *pCodecCtx_audio = player->input_codec_ctx[player->audio_stream_index];
 
     // AVFrame，像素数据（解码数据），用于存储解码后的像素数据(YUV)
     // 内存分配
@@ -547,28 +557,31 @@ void *decode_data2(void *arg) {
 
     // 2、设置缓冲区的属性（宽、高、像素格式），像素格式要和SurfaceView的像素格式一直
     ANativeWindow_setBuffersGeometry(player->nativeWindow,
-                                     pCodecCtx->width, pCodecCtx->height,
+                                     pCodecCtx_video->width, pCodecCtx_video->height,
                                      WINDOW_FORMAT_RGBA_8888);
 
     // av_image_get_buffer_size代替过时的avpicture_get_size
-    int numBytes = av_image_get_buffer_size(AV_PIX_FMT_RGBA, pCodecCtx->width,
-                                            pCodecCtx->height, 1);
+    int numBytes = av_image_get_buffer_size(AV_PIX_FMT_RGBA, pCodecCtx_video->width,
+                                            pCodecCtx_video->height, 1);
     // 缓冲区分配内存
     uint8_t *buffer = av_malloc(numBytes * sizeof(uint8_t));
 
     // 初始化缓冲区，av_image_fill_arrays替代过时的avpicture_fill
     av_image_fill_arrays(pRGBFrame->data, pRGBFrame->linesize, buffer, AV_PIX_FMT_RGBA,
-                         pCodecCtx->width, pCodecCtx->height, 1);
+                         pCodecCtx_video->width, pCodecCtx_video->height, 1);
 
     // 由于解码出来的帧格式不是RGBA的，在渲染之前需要进行格式转换
-    struct SwsContext *sws_ctx = sws_getContext(pCodecCtx->width, pCodecCtx->height,// 原始画面宽高
-                                                pCodecCtx->pix_fmt,// 原始画面像素格式
-                                                pCodecCtx->width, pCodecCtx->height,// 目标画面宽高
+    struct SwsContext *sws_ctx = sws_getContext(pCodecCtx_video->width,
+                                                pCodecCtx_video->height,// 原始画面宽高
+                                                pCodecCtx_video->pix_fmt,// 原始画面像素格式
+                                                pCodecCtx_video->width,
+                                                pCodecCtx_video->height,// 目标画面宽高
                                                 AV_PIX_FMT_RGBA,// 目标画面像素格式
                                                 SWS_BILINEAR,// 算法
                                                 NULL, NULL, NULL);
 
-    int frame_count = 0;
+    int frame_count_video = 0;
+    int frame_count_audio = 0;
 
     flag = 1;
 
@@ -581,8 +594,12 @@ void *decode_data2(void *arg) {
     while (av_read_frame(pFormatCtx, packet) >= 0 && flag) {
         if (packet->stream_index == player->video_stream_index) {
             // 只要视频压缩数据（根据流的索引位置判断）
-            LOG_I("解码%d帧", ++frame_count);
-            decode_video2(player, packet, pCodecCtx, pFrame, pRGBFrame, sws_ctx);
+            /*LOG_I("解码%d帧", ++frame_count_video);
+            decode_video2(player, packet, pCodecCtx_video, pFrame, pRGBFrame, sws_ctx);*/
+        } else if (packet->stream_index == player->audio_stream_index) {
+            // 音频压缩数据（根据流的索引位置判断）
+            LOG_I("解码视频%d帧", ++frame_count_audio);
+            decode_audio(env, player, packet, pCodecCtx_audio, pFrame);
         }
         // 释放资源
         av_packet_unref(packet);// av_packet_unref代替过时的av_free_packet
@@ -603,7 +620,8 @@ void *decode_data2(void *arg) {
     av_frame_free(&pRGBFrame);
 
     // 关闭解码器
-    avcodec_close(pCodecCtx);
+    avcodec_close(pCodecCtx_video);
+    avcodec_close(pCodecCtx_audio);
 
     // 释放AVFormatContext
     avformat_close_input(&pFormatCtx);
