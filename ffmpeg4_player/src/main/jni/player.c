@@ -354,16 +354,9 @@ void jni_audio_prepare(JNIEnv *env, jobject instance, struct Player *player) {
  * 解码音频
  */
 int decode_audio(JNIEnv *env, struct Player *player, AVPacket *packet,
-                 AVCodecContext *pCodecCtx, AVFrame *pFrame) {
+                 AVCodecContext *pCodecCtx, AVFrame *pFrame, uint8_t *out_buffer) {
 
     int ret;
-
-    // AVFrame，解码数据，用于存储解码后的数据
-    // 内存分配
-    AVFrame *pFrame1 = av_frame_alloc();// 必须使用av_frame_free()释放
-
-    // 16bit 44100 PCM 数据，16bit是2个字节（重采样缓冲区）
-    uint8_t *out_buffer = (uint8_t *) av_malloc(MAX_AUDIO_FRAME_SIZE);
 
     // 8.解码一帧音频压缩数据，得到音频PCM数据，AVPacket->AVFrame
     ret = avcodec_send_packet(pCodecCtx, packet);
@@ -385,7 +378,6 @@ int decode_audio(JNIEnv *env, struct Player *player, AVPacket *packet,
 
                 // LOG_I("解码：%d", ++frame_count);
                 // 9.转换音频
-                // TODO 报错
                 ret = swr_convert(player->swrCtx,// 重采样上下文
                                   &out_buffer,// 输出缓冲区
                                   MAX_AUDIO_FRAME_SIZE,// 每通道采样的可用空间量
@@ -440,8 +432,6 @@ int decode_audio(JNIEnv *env, struct Player *player, AVPacket *packet,
                 break;
         }
     }
-
-    av_frame_free(&pFrame1);
     return 0;
 }
 
@@ -478,6 +468,9 @@ void *decode_data(void *arg) {
     int frame_count_video = 0;
     int frame_count_audio = 0;
 
+    // 16bit 44100 PCM 数据，16bit是2个字节（重采样缓冲区）
+    uint8_t *out_buffer = (uint8_t *) av_malloc(MAX_AUDIO_FRAME_SIZE);
+
     flag = 1;
 
     // 准备读取
@@ -498,7 +491,7 @@ void *decode_data(void *arg) {
         } else if (packet->stream_index == player->audio_stream_index) {
             // 音频压缩数据（根据流的索引位置判断）
             LOG_I("解码视频%d帧", ++frame_count_audio);
-            decode_audio(env, player, packet, pCodecCtx_audio, pFrame);
+            decode_audio(env, player, packet, pCodecCtx_audio, pFrame, out_buffer);
         }
         // 释放资源
         av_packet_unref(packet);// av_packet_unref代替过时的av_free_packet
@@ -511,6 +504,9 @@ void *decode_data(void *arg) {
     // 释放AVFrame
     av_frame_free(&pFrame);
     av_frame_free(&pRGBFrame);
+
+    // 释放缓冲区
+    av_free(out_buffer);
 
     // 关闭解码器
     avcodec_close(pCodecCtx_video);
@@ -583,6 +579,9 @@ void *decode_data2(void *arg) {
     int frame_count_video = 0;
     int frame_count_audio = 0;
 
+    // 16bit 44100 PCM 数据，16bit是2个字节（重采样缓冲区）
+    uint8_t *out_buffer = (uint8_t *) av_malloc(MAX_AUDIO_FRAME_SIZE);
+
     flag = 1;
 
     // 准备读取
@@ -599,7 +598,7 @@ void *decode_data2(void *arg) {
         } else if (packet->stream_index == player->audio_stream_index) {
             // 音频压缩数据（根据流的索引位置判断）
             LOG_I("解码视频%d帧", ++frame_count_audio);
-            decode_audio(env, player, packet, pCodecCtx_audio, pFrame);
+            decode_audio(env, player, packet, pCodecCtx_audio, pFrame, out_buffer);
         }
         // 释放资源
         av_packet_unref(packet);// av_packet_unref代替过时的av_free_packet
@@ -739,6 +738,9 @@ void decode_audio_prepare(struct Player *player, int audio_stream_index) {
 
     // 重采样设置参数-------------end
 
+    // 根据设置的参数，初始化重采样上下文
+    swr_init(swrCtx);
+
     player->in_sample_fmt = in_sample_fmt;
     player->out_sample_fmt = out_sample_fmt;
     player->in_sample_rate = in_sample_rate;
@@ -791,17 +793,24 @@ Java_com_jamff_ffmpeg_MyPlayer_render(JNIEnv *env, jobject instance, jstring inp
     // 解码视频准备工作
     decode_video_prepare(env, player, surface, video_stream_index);
 
+    // 解码音频准备工作
+    decode_audio_prepare(player, audio_stream_index);
+
+    jni_audio_prepare(env, instance, player);
+
     // 创建子线程，解码视频
     pthread_create(&(player->decode_threads[video_stream_index]), NULL, decode_data,
                    (void *) player);
+
+    (*env)->ReleaseStringUTFChars(env, input_jstr, input_cstr);
 }
 
 JNIEXPORT void JNICALL
-Java_com_jamff_ffmpeg_MyPlayer_play(JNIEnv *env, jobject instance, jstring input_,
+Java_com_jamff_ffmpeg_MyPlayer_play(JNIEnv *env, jobject instance, jstring input_jstr,
                                     jobject surface) {
     LOG_I("play");
 
-    const char *input_cstr = (*env)->GetStringUTFChars(env, input_, 0);
+    const char *input_cstr = (*env)->GetStringUTFChars(env, input_jstr, 0);
 
     struct Player *player = (struct Player *) malloc(sizeof(struct Player));
 
@@ -834,7 +843,7 @@ Java_com_jamff_ffmpeg_MyPlayer_play(JNIEnv *env, jobject instance, jstring input
     pthread_create(&(player->decode_threads[video_stream_index]), NULL, decode_data2,
                    (void *) player);
 
-    (*env)->ReleaseStringUTFChars(env, input_, input_cstr);
+    (*env)->ReleaseStringUTFChars(env, input_jstr, input_cstr);
 }
 
 JNIEXPORT void JNICALL
