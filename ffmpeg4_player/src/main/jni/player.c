@@ -346,6 +346,7 @@ void jni_audio_prepare(JNIEnv *env, jobject instance, struct Player *player) {
 
     // JNI-----------------------end
 
+    // 必须创建全局引用
     audio_track_global = (*env)->NewGlobalRef(env, audio_track);
     player->audio_track_write_mid = audio_track_write_mid;
 }
@@ -752,7 +753,7 @@ void decode_audio_prepare(struct Player *player, int audio_stream_index) {
 JNIEXPORT void JNICALL
 Java_com_jamff_ffmpeg_MyPlayer_init(JNIEnv *env, jobject instance) {
 
-    // 创建全局引用
+    // 必须创建全局引用
     player_global = (*env)->NewGlobalRef(env, instance);
 
     // 获取MyPlayer的jclass，获取class必须要在主线程
@@ -798,8 +799,12 @@ Java_com_jamff_ffmpeg_MyPlayer_render(JNIEnv *env, jobject instance, jstring inp
 
     jni_audio_prepare(env, instance, player);
 
-    // 创建子线程，解码视频
-    pthread_create(&(player->decode_threads[video_stream_index]), NULL, decode_data,
+    // TODO 创建子线程，解码视频
+    /*pthread_create(&(player->decode_threads[video_stream_index]), NULL, decode_data,
+                   (void *) player);*/
+
+    // 创建子线程，解码音频
+    pthread_create(&(player->decode_threads[audio_stream_index]), NULL, decode_data,
                    (void *) player);
 
     (*env)->ReleaseStringUTFChars(env, input_jstr, input_cstr);
@@ -839,8 +844,12 @@ Java_com_jamff_ffmpeg_MyPlayer_play(JNIEnv *env, jobject instance, jstring input
 
     jni_audio_prepare(env, instance, player);
 
-    // 创建子线程，解码视频
-    pthread_create(&(player->decode_threads[video_stream_index]), NULL, decode_data2,
+    // TODO 创建子线程，解码视频
+    /*pthread_create(&(player->decode_threads[video_stream_index]), NULL, decode_data2,
+                   (void *) player);*/
+
+    // 创建子线程，解码音频
+    pthread_create(&(player->decode_threads[audio_stream_index]), NULL, decode_data2,
                    (void *) player);
 
     (*env)->ReleaseStringUTFChars(env, input_jstr, input_cstr);
