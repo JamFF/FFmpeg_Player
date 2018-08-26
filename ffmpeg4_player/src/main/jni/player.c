@@ -87,6 +87,8 @@ struct Player {
 
     // JNI
     jmethodID audio_track_write_mid;
+    jmethodID audio_track_stop_mid;
+    jmethodID audio_track_release_mid;
 };
 
 /**
@@ -349,6 +351,8 @@ void jni_audio_prepare(JNIEnv *env, jobject instance, struct Player *player) {
     // 必须创建全局引用
     audio_track_global = (*env)->NewGlobalRef(env, audio_track);
     player->audio_track_write_mid = audio_track_write_mid;
+    player->audio_track_stop_mid = audio_track_stop_mid;
+    player->audio_track_release_mid = audio_track_release_mid;
 }
 
 /**
@@ -480,7 +484,7 @@ void *decode_data(void *arg) {
     AVPacket *packet = av_malloc(sizeof(AVPacket));
     if (packet == NULL) {
         LOG_E("分配AVPacket内存失败");
-        return NULL;
+        goto end;
     }
 
     // 7.一帧一帧的读取压缩视频数据AVPacket
@@ -501,6 +505,12 @@ void *decode_data(void *arg) {
     end:
     // 7、释放资源
     ANativeWindow_release(player->nativeWindow);
+
+    // 四、调用AudioTrack.stop()
+    (*env)->CallVoidMethod(env, audio_track_global, player->audio_track_stop_mid);
+
+    // 五、调用AudioTrack.release()
+    (*env)->CallVoidMethod(env, audio_track_global, player->audio_track_release_mid);
 
     // 释放AVFrame
     av_frame_free(&pFrame);
@@ -589,6 +599,10 @@ void *decode_data2(void *arg) {
     // AVPacket，编码数据，用于存储一帧一帧的压缩数据（H264）
     // 缓冲区，开辟空间
     AVPacket *packet = av_malloc(sizeof(AVPacket));
+    if (packet == NULL) {
+        LOG_E("分配AVPacket内存失败");
+        goto end;
+    }
 
     // 7.一帧一帧的读取压缩视频数据AVPacket
     while (av_read_frame(pFormatCtx, packet) >= 0 && flag) {
@@ -605,15 +619,21 @@ void *decode_data2(void *arg) {
         av_packet_unref(packet);// av_packet_unref代替过时的av_free_packet
     }
 
+    end:
     // 释放SwsContext
     sws_freeContext(sws_ctx);
 
     // 释放缓冲区
     av_free(buffer);
 
-    end:
     // 7、释放资源
     ANativeWindow_release(player->nativeWindow);
+
+    // 四、调用AudioTrack.stop()
+    (*env)->CallVoidMethod(env, audio_track_global, player->audio_track_stop_mid);
+
+    // 五、调用AudioTrack.release()
+    (*env)->CallVoidMethod(env, audio_track_global, player->audio_track_release_mid);
 
     // 释放AVFrame
     av_frame_free(&pFrame);
