@@ -12,6 +12,11 @@ import android.media.AudioTrack;
 public class MyPlayer {
 
     interface OnCompletionListener {
+        /**
+         * 播放完成的回调
+         *
+         * @param result 目前为0，后期可加入错误码
+         */
         void onCompletion(int result);
     }
 
@@ -104,7 +109,7 @@ public class MyPlayer {
     /**
      * 播放完成，或者手动停止，提供给C调用
      *
-     * @param result 0成功，-1失败
+     * @param result 目前为0，后期可加入错误码
      */
     public void onCompletion(int result) {
         if (mOnCompletionListener != null) {

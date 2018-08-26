@@ -625,6 +625,7 @@ void *decode_data2(void *arg) {
 
     // 释放缓冲区
     av_free(buffer);
+    av_free(out_buffer);
 
     // 7、释放资源
     ANativeWindow_release(player->nativeWindow);
@@ -699,23 +700,13 @@ void decode_audio_prepare(struct Player *player, int audio_stream_index) {
     /***********************************打印信息 start***********************************/
     AVCodecContext *pCodecCtx = player->input_codec_ctx[audio_stream_index];
 
-    // 获取视频宽高
-    int videoWidth = pCodecCtx->width;
-    int videoHeight = pCodecCtx->height;
-
     // 封装格式上下文，统领全局的结构体，保存了视频文件封装格式的相关信息
     AVFormatContext *pFormatCtx = player->input_format_ctx;
 
-    // 输出视频信息
-    LOG_I("多媒体格式：%s", pFormatCtx->iformat->name);
-    // 视频AVStream
+    // 音频AVStream
     AVStream *stream = pFormatCtx->streams[audio_stream_index];
     LOG_I("时长：%f, %f", (pFormatCtx->duration) / 1000000.0,
           stream->duration * av_q2d(stream->time_base));
-    LOG_I("视频的宽高：%d, %d", videoWidth, videoHeight);
-    // 视频帧率，每秒多少帧
-    double frame_rate = av_q2d(stream->avg_frame_rate);
-    LOG_I("帧率 = %f", frame_rate);
     /***********************************打印信息 end***********************************/
 
     // 创建重采样上下文
