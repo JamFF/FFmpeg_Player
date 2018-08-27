@@ -20,7 +20,7 @@ JNIEXPORT void JNICALL Java_com_jamff_ffmpeg_MyPlayer_init
  * Method:    render
  * Signature: (Ljava/lang/String;Ljava/lang/Object;)V
  */
-JNIEXPORT void JNICALL Java_com_jamff_ffmpeg_MyPlayer_render
+JNIEXPORT jint JNICALL Java_com_jamff_ffmpeg_MyPlayer_render
         (JNIEnv *, jobject, jstring, jobject);
 
 /*
@@ -28,7 +28,7 @@ JNIEXPORT void JNICALL Java_com_jamff_ffmpeg_MyPlayer_render
  * Method:    play
  * Signature: (Ljava/lang/String;Ljava/lang/Object;)V
  */
-JNIEXPORT void JNICALL Java_com_jamff_ffmpeg_MyPlayer_play
+JNIEXPORT jint JNICALL Java_com_jamff_ffmpeg_MyPlayer_play
         (JNIEnv *, jobject, jstring, jobject);
 
 /*

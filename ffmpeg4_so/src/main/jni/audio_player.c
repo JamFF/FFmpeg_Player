@@ -130,8 +130,18 @@ Java_com_jamff_ffmpeg_MyPlayer_playMusic(JNIEnv *env, jobject instance, jstring 
 
     // 输入的声道布局
     uint64_t in_ch_layout = pCodecCtx->channel_layout;
+    LOG_I("in_ch_layout: %"
+                  PRIu64
+                  "", in_ch_layout);
     // 另一种方式根据声道个数获取默认的声道布局（2个声道，默认立体声stereo）
-    // int64_t in_ch_layout = av_get_default_channel_layout(pCodecCtx->channels);
+    /*int64_t in_ch_layout = av_get_default_channel_layout(pCodecCtx->channels);
+    LOG_I("in_ch_layout: %"
+                  PRIu64
+                  "", in_ch_layout);*/
+
+    // 通道布局中的通道数，真正的声道数
+    int in_channel_nb = av_get_channel_layout_nb_channels((uint64_t) in_ch_layout);
+    LOG_I("in_channels: %d", in_channel_nb);
 
     // 输入的采样格式
     enum AVSampleFormat in_sample_fmt = pCodecCtx->sample_fmt;

@@ -26,7 +26,7 @@
 // 停止的标记位
 int flag;
 
-JNIEXPORT int JNICALL
+JNIEXPORT jint JNICALL
 Java_com_jamff_ffmpeg_MyPlayer_render(JNIEnv *env, jobject instance, jstring input_jstr,
                                       jobject surface) {
     LOG_I("render");

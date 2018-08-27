@@ -732,8 +732,18 @@ void decode_audio_prepare(struct Player *player, int audio_stream_index) {
 
     // 输入的声道布局
     uint64_t in_ch_layout = pCodecCtx->channel_layout;
+    LOG_I("in_ch_layout: %"
+                  PRIu64
+                  "", in_ch_layout);
     // 另一种方式根据声道个数获取默认的声道布局（2个声道，默认立体声stereo）
-    // int64_t in_ch_layout = av_get_default_channel_layout(pCodecCtx->channels);
+    /*int64_t in_ch_layout = av_get_default_channel_layout(pCodecCtx->channels);
+    LOG_I("in_ch_layout: %"
+                  PRIu64
+                  "", in_ch_layout);*/
+
+    // 通道布局中的通道数，真正的声道数
+    int in_channel_nb = av_get_channel_layout_nb_channels((uint64_t) in_ch_layout);
+    LOG_I("in_channels: %d", in_channel_nb);
 
     // 输出的声道布局（立体声）
     uint64_t out_ch_layout = AV_CH_LAYOUT_STEREO;
@@ -776,7 +786,7 @@ Java_com_jamff_ffmpeg_MyPlayer_init(JNIEnv *env, jobject instance) {
                                                 "(I)V");// 字段签名
 }
 
-JNIEXPORT void JNICALL
+JNIEXPORT jint JNICALL
 Java_com_jamff_ffmpeg_MyPlayer_render(JNIEnv *env, jobject instance, jstring input_jstr,
                                       jobject surface) {
     LOG_I("render");
@@ -787,7 +797,7 @@ Java_com_jamff_ffmpeg_MyPlayer_render(JNIEnv *env, jobject instance, jstring inp
 
     // 初始化封装格式上下文
     if (init_input_format_ctx(player, input_cstr) < 0) {
-        return;
+        return -1;
     }
 
     int video_stream_index = player->video_stream_index;
@@ -795,11 +805,11 @@ Java_com_jamff_ffmpeg_MyPlayer_render(JNIEnv *env, jobject instance, jstring inp
 
     // 获取视频解码器并打开
     if (init_codec_context(player, video_stream_index) < 0) {
-        return;
+        return -1;
     }
     // 获取音频解码器并打开
     if (init_codec_context(player, audio_stream_index) < 0) {
-        return;
+        return -1;
     }
 
     // 解码视频准备工作
@@ -819,9 +829,11 @@ Java_com_jamff_ffmpeg_MyPlayer_render(JNIEnv *env, jobject instance, jstring inp
                    (void *) player);
 
     (*env)->ReleaseStringUTFChars(env, input_jstr, input_cstr);
+
+    return 0;
 }
 
-JNIEXPORT void JNICALL
+JNIEXPORT jint JNICALL
 Java_com_jamff_ffmpeg_MyPlayer_play(JNIEnv *env, jobject instance, jstring input_jstr,
                                     jobject surface) {
     LOG_I("play");
@@ -832,7 +844,7 @@ Java_com_jamff_ffmpeg_MyPlayer_play(JNIEnv *env, jobject instance, jstring input
 
     // 初始化封装格式上下文
     if (init_input_format_ctx(player, input_cstr) < 0) {
-        return;
+        return -1;
     }
 
     int video_stream_index = player->video_stream_index;
@@ -840,11 +852,11 @@ Java_com_jamff_ffmpeg_MyPlayer_play(JNIEnv *env, jobject instance, jstring input
 
     // 获取视频解码器并打开
     if (init_codec_context(player, video_stream_index) < 0) {
-        return;
+        return -1;
     }
     // 获取音频解码器并打开
     if (init_codec_context(player, audio_stream_index) < 0) {
-        return;
+        return -1;
     }
 
     // 解码视频准备工作
@@ -864,6 +876,8 @@ Java_com_jamff_ffmpeg_MyPlayer_play(JNIEnv *env, jobject instance, jstring input
                    (void *) player);
 
     (*env)->ReleaseStringUTFChars(env, input_jstr, input_cstr);
+
+    return 0;
 }
 
 JNIEXPORT void JNICALL
