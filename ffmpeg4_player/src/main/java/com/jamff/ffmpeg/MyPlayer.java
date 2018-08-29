@@ -60,6 +60,14 @@ public class MyPlayer {
     public native void play(String input, Object surface);
 
     /**
+     * 播放音视频
+     *
+     * @param input   媒体文件路径
+     * @param surface {@link android.view.Surface}
+     */
+    public native void playMedia(String input, Object surface);
+
+    /**
      * 停止播放
      */
     public native void stop();

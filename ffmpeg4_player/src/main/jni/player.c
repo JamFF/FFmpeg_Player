@@ -786,7 +786,7 @@ Java_com_jamff_ffmpeg_MyPlayer_init(JNIEnv *env, jobject instance) {
                                                 "(I)V");// 字段签名
 }
 
-JNIEXPORT jint JNICALL
+JNIEXPORT void JNICALL
 Java_com_jamff_ffmpeg_MyPlayer_render(JNIEnv *env, jobject instance, jstring input_jstr,
                                       jobject surface) {
     LOG_I("render");
@@ -797,7 +797,7 @@ Java_com_jamff_ffmpeg_MyPlayer_render(JNIEnv *env, jobject instance, jstring inp
 
     // 初始化封装格式上下文
     if (init_input_format_ctx(player, input_cstr) < 0) {
-        return -1;
+        return;
     }
 
     int video_stream_index = player->video_stream_index;
@@ -805,11 +805,11 @@ Java_com_jamff_ffmpeg_MyPlayer_render(JNIEnv *env, jobject instance, jstring inp
 
     // 获取视频解码器并打开
     if (init_codec_context(player, video_stream_index) < 0) {
-        return -1;
+        return;
     }
     // 获取音频解码器并打开
     if (init_codec_context(player, audio_stream_index) < 0) {
-        return -1;
+        return;
     }
 
     // 解码视频准备工作
@@ -830,10 +830,10 @@ Java_com_jamff_ffmpeg_MyPlayer_render(JNIEnv *env, jobject instance, jstring inp
 
     (*env)->ReleaseStringUTFChars(env, input_jstr, input_cstr);
 
-    return 0;
+    return;
 }
 
-JNIEXPORT jint JNICALL
+JNIEXPORT void JNICALL
 Java_com_jamff_ffmpeg_MyPlayer_play(JNIEnv *env, jobject instance, jstring input_jstr,
                                     jobject surface) {
     LOG_I("play");
@@ -844,7 +844,7 @@ Java_com_jamff_ffmpeg_MyPlayer_play(JNIEnv *env, jobject instance, jstring input
 
     // 初始化封装格式上下文
     if (init_input_format_ctx(player, input_cstr) < 0) {
-        return -1;
+        return;
     }
 
     int video_stream_index = player->video_stream_index;
@@ -852,11 +852,11 @@ Java_com_jamff_ffmpeg_MyPlayer_play(JNIEnv *env, jobject instance, jstring input
 
     // 获取视频解码器并打开
     if (init_codec_context(player, video_stream_index) < 0) {
-        return -1;
+        return;
     }
     // 获取音频解码器并打开
     if (init_codec_context(player, audio_stream_index) < 0) {
-        return -1;
+        return;
     }
 
     // 解码视频准备工作
@@ -876,8 +876,12 @@ Java_com_jamff_ffmpeg_MyPlayer_play(JNIEnv *env, jobject instance, jstring input
                    (void *) player);
 
     (*env)->ReleaseStringUTFChars(env, input_jstr, input_cstr);
+}
 
-    return 0;
+JNIEXPORT void JNICALL
+Java_com_jamff_ffmpeg_MyPlayer_playMedia(JNIEnv *env, jobject instance, jstring input_jstr,
+                                         jobject surface) {
+    LOG_I("playMedia");
 }
 
 JNIEXPORT void JNICALL

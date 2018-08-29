@@ -99,10 +99,16 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
             case R.id.bt_play_video_2:
                 playVideo(false);
                 break;
+            case R.id.bt_play_music_video:
+                if (mSurface == null) {
+                    Log.e(TAG, "start: mSurface == null");
+                    return;
+                }
+                mPlayer.playMedia("", mSurface);
+                break;
             case R.id.bt_stop:
                 mPlayer.stop();
                 break;
-
             default:
                 break;
         }
