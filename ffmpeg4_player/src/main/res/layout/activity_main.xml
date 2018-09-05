@@ -31,12 +31,12 @@
             android:text="@string/play_video_2"/>
 
         <Button
-            android:id="@+id/bt_play_music_video"
+            android:id="@+id/bt_play_music"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_toEndOf="@id/bt_play_video_2"
             android:enabled="false"
-            android:text="@string/play_music_video"/>
+            android:text="@string/play_music"/>
 
         <Button
             android:id="@+id/bt_stop"

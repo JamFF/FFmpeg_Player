@@ -35,7 +35,7 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
     private VideoView video_view;
     private Button bt_play_video_1;
     private Button bt_play_video_2;
-    private Button bt_play_music_video;
+    private Button bt_play_music;
     private Button bt_stop;
 
     private MyPlayer mPlayer;
@@ -55,7 +55,7 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         video_view = findViewById(R.id.video_view);
         bt_play_video_1 = findViewById(R.id.bt_play_video_1);
         bt_play_video_2 = findViewById(R.id.bt_play_video_2);
-        bt_play_music_video = findViewById(R.id.bt_play_music_video);
+        bt_play_music = findViewById(R.id.bt_play_music);
         bt_stop = findViewById(R.id.bt_stop);
     }
 
@@ -70,7 +70,7 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         video_view.getHolder().addCallback(this);
         bt_play_video_1.setOnClickListener(this);
         bt_play_video_2.setOnClickListener(this);
-        bt_play_music_video.setOnClickListener(this);
+        bt_play_music.setOnClickListener(this);
         bt_stop.setOnClickListener(this);
     }
 
@@ -99,12 +99,8 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
             case R.id.bt_play_video_2:
                 playVideo(false);
                 break;
-            case R.id.bt_play_music_video:
-                if (mSurface == null) {
-                    Log.e(TAG, "start: mSurface == null");
-                    return;
-                }
-                mPlayer.playMedia("", mSurface);
+            case R.id.bt_play_music:
+                playMusic();
                 break;
             case R.id.bt_stop:
                 mPlayer.stop();
@@ -132,7 +128,7 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
     }
 
     /**
-     * 播放媒体文件
+     * 播放媒体文件的视频
      *
      * @param is_libyuv true 使用libyuv将YUV转换为RGB
      *                  false 使用ffmpeg自带的swscale.h中的sws_scale将解码数据转换为RGB
@@ -145,7 +141,7 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
 
         bt_play_video_1.setEnabled(false);
         bt_play_video_2.setEnabled(false);
-        bt_play_music_video.setEnabled(false);
+        bt_play_music.setEnabled(false);
         bt_stop.setEnabled(true);
 
         if (mSurface == null) {
@@ -155,10 +151,32 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
 
         // 子线程播放，播放完成后回调onCompletion
         if (is_libyuv) {
-            mPlayer.render(videoFile.getAbsolutePath(), mSurface);
+            mPlayer.renderVideo(videoFile.getAbsolutePath(), mSurface);
         } else {
-            mPlayer.play(videoFile.getAbsolutePath(), mSurface);
+            mPlayer.playVideo(videoFile.getAbsolutePath(), mSurface);
         }
+    }
+
+    /**
+     * 播放媒体文件的音频
+     */
+    private void playMusic() {
+        if (!checkVideoFile()) {
+            return;
+        }
+
+        bt_play_video_1.setEnabled(false);
+        bt_play_video_2.setEnabled(false);
+        bt_play_music.setEnabled(false);
+        bt_stop.setEnabled(true);
+
+        if (mSurface == null) {
+            Log.e(TAG, "start: mSurface == null");
+            return;
+        }
+
+        // 子线程播放，播放完成后回调onCompletion
+        mPlayer.playMusic(videoFile.getAbsolutePath(), mSurface);
     }
 
     @Override
@@ -194,7 +212,7 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
             public void run() {
                 bt_play_video_1.setEnabled(true);
                 bt_play_video_2.setEnabled(true);
-                bt_play_music_video.setEnabled(true);
+                bt_play_music.setEnabled(true);
                 clearDraw();
                 if (result == 0) {
                     Toast.makeText(MainActivity.this, "播放完成", Toast.LENGTH_SHORT).show();
@@ -216,7 +234,7 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         } else {
             bt_play_video_1.setEnabled(true);
             bt_play_video_2.setEnabled(true);
-            bt_play_music_video.setEnabled(true);
+            bt_play_music.setEnabled(true);
             Log.d(TAG, "checkPermission: 已经授权");
         }
     }
@@ -228,7 +246,7 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
             if (grantResults[0] == PackageManager.PERMISSION_GRANTED) {
                 bt_play_video_1.setEnabled(true);
                 bt_play_video_2.setEnabled(true);
-                bt_play_music_video.setEnabled(true);
+                bt_play_music.setEnabled(true);
                 Log.d(TAG, "onRequestPermissionsResult: 接受权限");
             } else {
                 Toast.makeText(this, "未开通文件读写权限", Toast.LENGTH_SHORT).show();

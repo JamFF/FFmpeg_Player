@@ -441,7 +441,7 @@ int decode_audio(JNIEnv *env, struct Player *player, AVPacket *packet,
 }
 
 /**
- * 解码音视频，子线程函数
+ * 解码媒体文件，由于没有音视频同步，只解码视频，子线程函数
  */
 void *decode_data(void *arg) {
 
@@ -491,12 +491,12 @@ void *decode_data(void *arg) {
     while (av_read_frame(pFormatCtx, packet) >= 0 && flag) {
         if (packet->stream_index == player->video_stream_index) {
             // 视频压缩数据（根据流的索引位置判断）
-            /*LOG_I("解码视频%d帧", ++frame_count_video);
-            decode_video(player, packet, pCodecCtx_video, pFrame, pRGBFrame);*/
+            LOG_I("解码视频%d帧", ++frame_count_video);
+            decode_video(player, packet, pCodecCtx_video, pFrame, pRGBFrame);
         } else if (packet->stream_index == player->audio_stream_index) {
             // 音频压缩数据（根据流的索引位置判断）
-            LOG_I("解码视频%d帧", ++frame_count_audio);
-            decode_audio(env, player, packet, pCodecCtx_audio, pFrame, out_buffer);
+            /*LOG_I("解码视频%d帧", ++frame_count_audio);
+            decode_audio(env, player, packet, pCodecCtx_audio, pFrame, out_buffer);*/
         }
         // 释放资源
         av_packet_unref(packet);// av_packet_unref代替过时的av_free_packet
@@ -538,7 +538,7 @@ void *decode_data(void *arg) {
 }
 
 /**
- *  解码音视频，子线程函数
+ *  解码媒体文件，由于没有音视频同步，只解码视频，子线程函数
  */
 void *decode_data2(void *arg) {
 
@@ -608,12 +608,12 @@ void *decode_data2(void *arg) {
     while (av_read_frame(pFormatCtx, packet) >= 0 && flag) {
         if (packet->stream_index == player->video_stream_index) {
             // 只要视频压缩数据（根据流的索引位置判断）
-            /*LOG_I("解码%d帧", ++frame_count_video);
-            decode_video2(player, packet, pCodecCtx_video, pFrame, pRGBFrame, sws_ctx);*/
+            LOG_I("解码%d帧", ++frame_count_video);
+            decode_video2(player, packet, pCodecCtx_video, pFrame, pRGBFrame, sws_ctx);
         } else if (packet->stream_index == player->audio_stream_index) {
             // 音频压缩数据（根据流的索引位置判断）
-            LOG_I("解码视频%d帧", ++frame_count_audio);
-            decode_audio(env, player, packet, pCodecCtx_audio, pFrame, out_buffer);
+            /*LOG_I("解码视频%d帧", ++frame_count_audio);
+            decode_audio(env, player, packet, pCodecCtx_audio, pFrame, out_buffer);*/
         }
         // 释放资源
         av_packet_unref(packet);// av_packet_unref代替过时的av_free_packet
@@ -639,6 +639,103 @@ void *decode_data2(void *arg) {
     // 释放AVFrame
     av_frame_free(&pFrame);
     av_frame_free(&pRGBFrame);
+
+    // 关闭解码器
+    avcodec_close(pCodecCtx_video);
+    avcodec_close(pCodecCtx_audio);
+
+    // 释放AVFormatContext
+    avformat_close_input(&pFormatCtx);
+
+    // 调用MyPlayer.onCompletion()
+    (*env)->CallVoidMethod(env, player_global,// jobject
+                           player_completion_mid,// onCompletion()
+                           0);// onCompletion的参数
+
+    // 取消关联
+    (*javaVM)->DetachCurrentThread(javaVM);
+
+    return NULL;
+}
+
+/**
+ * 解码媒体文件，由于没有音视频同步，只解码音频，子线程函数
+ */
+void *decode_data_audio(void *arg) {
+
+    // 每个线程都有独立的JNIEnv
+    JNIEnv *env;
+    // 通过JavaVM关联当前线程，获取当前线程的JNIEnv
+    (*javaVM)->AttachCurrentThread(javaVM, &env, NULL);
+
+    struct Player *player = (struct Player *) arg;
+    AVFormatContext *pFormatCtx = player->input_format_ctx;
+    AVCodecContext *pCodecCtx_video = player->input_codec_ctx[player->video_stream_index];
+    AVCodecContext *pCodecCtx_audio = player->input_codec_ctx[player->audio_stream_index];
+
+    // AVFrame，像素数据（解码数据），用于存储解码后的像素数据(YUV)
+    // 内存分配
+    AVFrame *pFrame = av_frame_alloc();// 实际就是YUV420P
+    AVFrame *pRGBFrame = av_frame_alloc();// RGB，用于渲染
+
+    if (pRGBFrame == NULL || pFrame == NULL) {
+        LOG_E("Could not allocate video frame");
+        goto end;
+    }
+
+    // 2、设置缓冲区的属性（宽、高、像素格式），像素格式要和SurfaceView的像素格式一直
+    ANativeWindow_setBuffersGeometry(player->nativeWindow,
+                                     pCodecCtx_video->width, pCodecCtx_video->height,
+                                     WINDOW_FORMAT_RGBA_8888);
+
+    int frame_count_video = 0;
+    int frame_count_audio = 0;
+
+    // 16bit 44100 PCM 数据，16bit是2个字节（重采样缓冲区）
+    uint8_t *out_buffer = (uint8_t *) av_malloc(MAX_AUDIO_FRAME_SIZE);
+
+    flag = 1;
+
+    // 准备读取
+    // AVPacket，编码数据，用于存储一帧一帧的压缩数据（H264）
+    // 缓冲区，开辟空间
+    AVPacket *packet = av_malloc(sizeof(AVPacket));
+    if (packet == NULL) {
+        LOG_E("分配AVPacket内存失败");
+        goto end;
+    }
+
+    // 7.一帧一帧的读取压缩视频数据AVPacket
+    while (av_read_frame(pFormatCtx, packet) >= 0 && flag) {
+        if (packet->stream_index == player->video_stream_index) {
+            // 视频压缩数据（根据流的索引位置判断）
+            /*LOG_I("解码视频%d帧", ++frame_count_video);
+            decode_video(player, packet, pCodecCtx_video, pFrame, pRGBFrame);*/
+        } else if (packet->stream_index == player->audio_stream_index) {
+            // 音频压缩数据（根据流的索引位置判断）
+            LOG_I("解码音频%d帧", ++frame_count_audio);
+            decode_audio(env, player, packet, pCodecCtx_audio, pFrame, out_buffer);
+        }
+        // 释放资源
+        av_packet_unref(packet);// av_packet_unref代替过时的av_free_packet
+    }
+
+    end:
+    // 7、释放资源
+    ANativeWindow_release(player->nativeWindow);
+
+    // 四、调用AudioTrack.stop()
+    (*env)->CallVoidMethod(env, audio_track_global, player->audio_track_stop_mid);
+
+    // 五、调用AudioTrack.release()
+    (*env)->CallVoidMethod(env, audio_track_global, player->audio_track_release_mid);
+
+    // 释放AVFrame
+    av_frame_free(&pFrame);
+    av_frame_free(&pRGBFrame);
+
+    // 释放缓冲区
+    av_free(out_buffer);
 
     // 关闭解码器
     avcodec_close(pCodecCtx_video);
@@ -787,9 +884,9 @@ Java_com_jamff_ffmpeg_MyPlayer_init(JNIEnv *env, jobject instance) {
 }
 
 JNIEXPORT void JNICALL
-Java_com_jamff_ffmpeg_MyPlayer_render(JNIEnv *env, jobject instance, jstring input_jstr,
-                                      jobject surface) {
-    LOG_I("render");
+Java_com_jamff_ffmpeg_MyPlayer_renderVideo(JNIEnv *env, jobject instance, jstring input_jstr,
+                                           jobject surface) {
+    LOG_I("renderVideo");
 
     const char *input_cstr = (*env)->GetStringUTFChars(env, input_jstr, 0);
 
@@ -820,68 +917,103 @@ Java_com_jamff_ffmpeg_MyPlayer_render(JNIEnv *env, jobject instance, jstring inp
 
     jni_audio_prepare(env, instance, player);
 
-    // TODO 创建子线程，解码视频
-    /*pthread_create(&(player->decode_threads[video_stream_index]), NULL, decode_data,
-                   (void *) player);*/
+    // 创建子线程，解码视频
+    pthread_create(&(player->decode_threads[video_stream_index]), NULL, decode_data,
+                   (void *) player);
 
     // 创建子线程，解码音频
-    pthread_create(&(player->decode_threads[audio_stream_index]), NULL, decode_data,
+    /*pthread_create(&(player->decode_threads[audio_stream_index]), NULL, decode_data,
+                   (void *) player);*/
+
+    (*env)->ReleaseStringUTFChars(env, input_jstr, input_cstr);
+}
+
+JNIEXPORT void JNICALL
+Java_com_jamff_ffmpeg_MyPlayer_playVideo(JNIEnv *env, jobject instance, jstring input_jstr,
+                                         jobject surface) {
+    LOG_I("playVideo");
+
+    const char *input_cstr = (*env)->GetStringUTFChars(env, input_jstr, 0);
+
+    struct Player *player = (struct Player *) malloc(sizeof(struct Player));
+
+    // 初始化封装格式上下文
+    if (init_input_format_ctx(player, input_cstr) < 0) {
+        return;
+    }
+
+    int video_stream_index = player->video_stream_index;
+    int audio_stream_index = player->audio_stream_index;
+
+    // 获取视频解码器并打开
+    if (init_codec_context(player, video_stream_index) < 0) {
+        return;
+    }
+    // 获取音频解码器并打开
+    if (init_codec_context(player, audio_stream_index) < 0) {
+        return;
+    }
+
+    // 解码视频准备工作
+    decode_video_prepare(env, player, surface, video_stream_index);
+
+    // 解码音频准备工作
+    decode_audio_prepare(player, audio_stream_index);
+
+    jni_audio_prepare(env, instance, player);
+
+    // 创建子线程，解码视频
+    pthread_create(&(player->decode_threads[video_stream_index]), NULL, decode_data2,
                    (void *) player);
+
+    (*env)->ReleaseStringUTFChars(env, input_jstr, input_cstr);
+}
+
+JNIEXPORT void JNICALL
+Java_com_jamff_ffmpeg_MyPlayer_playMusic(JNIEnv *env, jobject instance, jstring input_jstr,
+                                         jobject surface) {
+    LOG_I("playMusic");
+
+    const char *input_cstr = (*env)->GetStringUTFChars(env, input_jstr, 0);
+
+    struct Player *player = (struct Player *) malloc(sizeof(struct Player));
+
+    // 初始化封装格式上下文
+    if (init_input_format_ctx(player, input_cstr) < 0) {
+        return;
+    }
+
+    int video_stream_index = player->video_stream_index;
+    int audio_stream_index = player->audio_stream_index;
+
+    // 获取视频解码器并打开
+    if (init_codec_context(player, video_stream_index) < 0) {
+        return;
+    }
+    // 获取音频解码器并打开
+    if (init_codec_context(player, audio_stream_index) < 0) {
+        return;
+    }
+
+    // 解码视频准备工作
+    decode_video_prepare(env, player, surface, video_stream_index);
+
+    // 解码音频准备工作
+    decode_audio_prepare(player, audio_stream_index);
+
+    jni_audio_prepare(env, instance, player);
+
+    // 创建子线程，解码音频
+    pthread_create(&(player->decode_threads[audio_stream_index]), NULL, decode_data_audio,
+                   (void *) player);
+
+    // 创建子线程，解码音频
+    /*pthread_create(&(player->decode_threads[audio_stream_index]), NULL, decode_data2,
+                   (void *) player);*/
 
     (*env)->ReleaseStringUTFChars(env, input_jstr, input_cstr);
 
     return;
-}
-
-JNIEXPORT void JNICALL
-Java_com_jamff_ffmpeg_MyPlayer_play(JNIEnv *env, jobject instance, jstring input_jstr,
-                                    jobject surface) {
-    LOG_I("play");
-
-    const char *input_cstr = (*env)->GetStringUTFChars(env, input_jstr, 0);
-
-    struct Player *player = (struct Player *) malloc(sizeof(struct Player));
-
-    // 初始化封装格式上下文
-    if (init_input_format_ctx(player, input_cstr) < 0) {
-        return;
-    }
-
-    int video_stream_index = player->video_stream_index;
-    int audio_stream_index = player->audio_stream_index;
-
-    // 获取视频解码器并打开
-    if (init_codec_context(player, video_stream_index) < 0) {
-        return;
-    }
-    // 获取音频解码器并打开
-    if (init_codec_context(player, audio_stream_index) < 0) {
-        return;
-    }
-
-    // 解码视频准备工作
-    decode_video_prepare(env, player, surface, video_stream_index);
-
-    // 解码音频准备工作
-    decode_audio_prepare(player, audio_stream_index);
-
-    jni_audio_prepare(env, instance, player);
-
-    // TODO 创建子线程，解码视频
-    /*pthread_create(&(player->decode_threads[video_stream_index]), NULL, decode_data2,
-                   (void *) player);*/
-
-    // 创建子线程，解码音频
-    pthread_create(&(player->decode_threads[audio_stream_index]), NULL, decode_data2,
-                   (void *) player);
-
-    (*env)->ReleaseStringUTFChars(env, input_jstr, input_cstr);
-}
-
-JNIEXPORT void JNICALL
-Java_com_jamff_ffmpeg_MyPlayer_playMedia(JNIEnv *env, jobject instance, jstring input_jstr,
-                                         jobject surface) {
-    LOG_I("playMedia");
 }
 
 JNIEXPORT void JNICALL

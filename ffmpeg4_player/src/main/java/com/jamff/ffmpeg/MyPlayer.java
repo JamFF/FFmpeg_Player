@@ -48,7 +48,7 @@ public class MyPlayer {
      * @param input   输入视频路径
      * @param surface {@link android.view.Surface}
      */
-    public native void render(String input, Object surface);
+    public native void renderVideo(String input, Object surface);
 
     /**
      * 使用ffmpeg自带的swscale.h中的sws_scale将解码数据转换为RGB，进行播放
@@ -57,7 +57,7 @@ public class MyPlayer {
      * @param input   输入视频路径
      * @param surface {@link android.view.Surface}
      */
-    public native void play(String input, Object surface);
+    public native void playVideo(String input, Object surface);
 
     /**
      * 播放音视频
@@ -65,7 +65,7 @@ public class MyPlayer {
      * @param input   媒体文件路径
      * @param surface {@link android.view.Surface}
      */
-    public native void playMedia(String input, Object surface);
+    public native void playMusic(String input, Object surface);
 
     /**
      * 停止播放

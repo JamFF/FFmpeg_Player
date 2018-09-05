@@ -17,26 +17,26 @@ JNIEXPORT void JNICALL Java_com_jamff_ffmpeg_MyPlayer_init
 
 /*
  * Class:     com_jamff_ffmpeg_MyPlayer
- * Method:    render
+ * Method:    renderVideo
  * Signature: (Ljava/lang/String;Ljava/lang/Object;)V
  */
-JNIEXPORT void JNICALL Java_com_jamff_ffmpeg_MyPlayer_render
+JNIEXPORT void JNICALL Java_com_jamff_ffmpeg_MyPlayer_renderVideo
         (JNIEnv *, jobject, jstring, jobject);
 
 /*
  * Class:     com_jamff_ffmpeg_MyPlayer
- * Method:    play
+ * Method:    playVideo
  * Signature: (Ljava/lang/String;Ljava/lang/Object;)V
  */
-JNIEXPORT void JNICALL Java_com_jamff_ffmpeg_MyPlayer_play
+JNIEXPORT void JNICALL Java_com_jamff_ffmpeg_MyPlayer_playVideo
         (JNIEnv *, jobject, jstring, jobject);
 
 /*
  * Class:     com_jamff_ffmpeg_MyPlayer
- * Method:    play_media
+ * Method:    playMusic
  * Signature: (Ljava/lang/String;Ljava/lang/Object;)V
  */
-JNIEXPORT void JNICALL Java_com_jamff_ffmpeg_MyPlayer_playMedia
+JNIEXPORT void JNICALL Java_com_jamff_ffmpeg_MyPlayer_playMusic
         (JNIEnv *, jobject, jstring, jobject);
 
 /*
