@@ -1,4 +1,4 @@
-# FFmpeg播放音视频
+# FFmpeg播放音视频同步
 
 1. 在NDK r17环境下，使用老脚本，编译FFmpeg4.0动态库
 2. 在C代码中开启子线程，将MP4解码YUV，转为RGB并绘制到UI，可以支持其他视频，例如mkv，avi，flv
