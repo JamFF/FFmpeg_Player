@@ -108,4 +108,5 @@ target_link_libraries( # Specifies the target library.
                        # included in the NDK.
                        # 使用native_window需要引入，android这里是简写，也可以仿照log-lib去写
                        android
+                       # 目录在...\sdk\ndk-bundle\platforms\android-21\arch-arm\usr\lib\liblog.so
                        ${log-lib} )
