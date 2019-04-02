@@ -106,5 +106,6 @@ target_link_libraries( # Specifies the target library.
                        # Links the target library to the log library
                        # included in the NDK.
                        # 使用native_window需要引入，android这里是简写，也可以仿照log-lib去写
+                       # 在路径platforms/android-xx/arch-xx/usr/lib
                        android
                        ${log-lib} )
