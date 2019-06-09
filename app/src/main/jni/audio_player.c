@@ -13,7 +13,7 @@
 #define LOG_I(FORMAT, ...) __android_log_print(ANDROID_LOG_INFO,"JamFF",FORMAT,##__VA_ARGS__);
 #define LOG_E(FORMAT, ...) __android_log_print(ANDROID_LOG_ERROR,"JamFF",FORMAT,##__VA_ARGS__);
 
-#define MAX_AUDIO_FRAME_SIZE 44100 * 2
+#define MAX_AUDIO_FRAME_SIZE (44100 * 2)
 
 JNIEXPORT jint JNICALL
 Java_com_jamff_ffmpeg_DecodeUtils_decodeAudio(JNIEnv *env, jclass type, jstring input_jstr,
@@ -109,18 +109,19 @@ Java_com_jamff_ffmpeg_DecodeUtils_decodeAudio(JNIEnv *env, jclass type, jstring 
     SwrContext *swrCtx = swr_alloc();
     if (swrCtx == NULL) {
         LOG_E("分配SwrContext失败");
+        return -1;
     }
 
     // 重采样设置参数-------------start
 
-    // 输出的声道布局（立体声）
+    // 输出的声道布局（立体声，分为左右声道）
     uint64_t out_ch_layout = AV_CH_LAYOUT_STEREO;
 
     // 输出采样格式，16bit
     enum AVSampleFormat out_sample_fmt = AV_SAMPLE_FMT_S16;
 
     // 输出采样率，44100Hz，在一秒钟内对声音信号采样44100次
-    int out_sample_rate = 44100;
+    const int out_sample_rate = 44100;
 
     // 输入的声道布局
     uint64_t in_ch_layout = pCodecCtx->channel_layout;
@@ -144,7 +145,7 @@ Java_com_jamff_ffmpeg_DecodeUtils_decodeAudio(JNIEnv *env, jclass type, jstring 
     // 根据设置的参数，初始化重采样上下文
     swr_init(swrCtx);
 
-    // 16bit 44100 PCM 数据，16bit是2个字节
+    // 输出缓冲区，16bit 44100 PCM 数据，16bit是2个字节
     uint8_t *out_buffer = (uint8_t *) av_malloc(MAX_AUDIO_FRAME_SIZE);
 
     // 输出的声道个数
@@ -153,8 +154,13 @@ Java_com_jamff_ffmpeg_DecodeUtils_decodeAudio(JNIEnv *env, jclass type, jstring 
 
     // 输出文件
     FILE *fp_pcm = fopen(output_cstr, "wb");
+    if (fp_pcm == NULL) {
+        LOG_E("%s 打开失败", output_cstr);
+        return -1;
+    }
 
-    int got_frame, ret;
+    int got_frame;
+    int ret;
 
     int frame_count = 0;
 
@@ -166,7 +172,7 @@ Java_com_jamff_ffmpeg_DecodeUtils_decodeAudio(JNIEnv *env, jclass type, jstring 
             ret = avcodec_decode_audio4(pCodecCtx, pFrame, &got_frame, packet);
             if (ret < 0) {
                 LOG_E("解码错误 %d", ret);
-                // FIXME 第一帧会返回-1094995529，AVERROR_INVALIDDATA
+                // 第一帧会返回-1094995529，AVERROR_INVALIDDATA，因为大多是歌手信息之类
                 // return -1;
             }
 
